@@ -2,7 +2,13 @@ import { request as httpRequest } from 'node:http';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { loadProfiles, saveProfiles } from '../src/profile-store.js';
 import { startServer } from '../src/server.js';
+
+vi.mock('../src/profile-store.js', () => ({
+  loadProfiles: vi.fn(async () => []),
+  saveProfiles: vi.fn(async (profiles) => profiles)
+}));
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 
@@ -104,6 +110,103 @@ describe('startServer', () => {
       data: { id: 11, name: 'Biology' },
       ok: true,
       status: 200
+    });
+  });
+
+  it('loads saved profiles through the local API', async () => {
+    vi.mocked(loadProfiles).mockResolvedValueOnce([
+      {
+        host: 'https://canvas.example.edu',
+        id: 'profile-1',
+        name: 'UWM Prod',
+        token: 'stored-token'
+      }
+    ]);
+
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/profiles`);
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      profiles: [
+        {
+          host: 'https://canvas.example.edu',
+          id: 'profile-1',
+          name: 'UWM Prod',
+          token: 'stored-token'
+        }
+      ]
+    });
+  });
+
+  it('saves profiles through the local API', async () => {
+    vi.mocked(saveProfiles).mockResolvedValueOnce([
+      {
+        host: 'https://canvas.example.edu',
+        id: 'profile-1',
+        name: 'UWM Prod',
+        token: 'stored-token'
+      }
+    ]);
+
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/profiles`, {
+      body: JSON.stringify({
+        profiles: [
+          {
+            host: 'https://canvas.example.edu',
+            id: 'profile-1',
+            name: 'UWM Prod',
+            token: 'stored-token'
+          }
+        ]
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT'
+    });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(saveProfiles)).toHaveBeenCalledWith([
+      {
+        host: 'https://canvas.example.edu',
+        id: 'profile-1',
+        name: 'UWM Prod',
+        token: 'stored-token'
+      }
+    ]);
+    expect(JSON.parse(response.body)).toEqual({
+      profiles: [
+        {
+          host: 'https://canvas.example.edu',
+          id: 'profile-1',
+          name: 'UWM Prod',
+          token: 'stored-token'
+        }
+      ]
+    });
+  });
+
+  it('rejects invalid profile save requests', async () => {
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/profiles`, {
+      body: JSON.stringify({
+        profiles: [{ id: 'profile-1' }]
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT'
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'Profile requests must include a profiles array with id, name, host, and token fields.',
+      ok: false,
+      status: 400
     });
   });
 

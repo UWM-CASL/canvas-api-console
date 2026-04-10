@@ -100,7 +100,7 @@ export async function saveProfiles(profiles: SavedProfile[]): Promise<SavedProfi
     ...existingProfiles.map((profile) => profile.id),
     ...(await listTokenProfileIds())
   ]);
-  const storedProfiles = profiles.map(({ token: _token, ...profile }) => ({
+  const storedProfiles = profiles.map((profile) => ({
     host: profile.host,
     id: profile.id,
     name: profile.name

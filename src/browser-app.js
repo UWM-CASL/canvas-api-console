@@ -1132,6 +1132,15 @@ function updateNodeElementPosition(nodeId) {
   updateWireLayer()
 }
 
+function getCanvasPoint(event, nodeSpace) {
+  const spaceRect = nodeSpace.getBoundingClientRect()
+
+  return {
+    x: event.clientX - spaceRect.left + nodeSpace.scrollLeft,
+    y: event.clientY - spaceRect.top + nodeSpace.scrollTop
+  }
+}
+
 function getHandleCenter(nodeId, handleKey, direction) {
   const nodeSpace = document.getElementById('node-space')
   const handleElement = appRoot.querySelector(
@@ -1268,6 +1277,7 @@ function loadQueryFromFile(file) {
 
       const parsed = JSON.parse(reader.result)
       hydrateState(parsed)
+      void persistProfiles()
       setStatus('Loaded a .query.json file. Bearer tokens must be re-entered locally.', 'success')
     } catch {
       setStatus('The selected file is not a valid .query.json export.', 'error')
@@ -1539,6 +1549,7 @@ function mutateControl(target) {
     if (profile) {
       profile[profileField] = target.value
       render()
+      queueProfileSave()
     }
 
     return
@@ -1673,10 +1684,9 @@ function handleAction(target) {
 
   if (action === 'add-profile') {
     state.profiles.push(createProfile())
-    if (!state.nodes.some((node) => node.type === 'api')) {
-      state.activeTab = 'servers'
-    }
-    setStatus('Added a server profile. Tokens stay in memory only.', 'success')
+    state.activeTab = 'servers'
+    render()
+    void persistProfiles()
     return true
   }
 
@@ -1691,7 +1701,8 @@ function handleAction(target) {
       }
     }
 
-    setStatus('Removed the selected server profile.', 'success')
+    render()
+    void persistProfiles({ announce: true, successMessage: 'Removed the selected server profile.' })
     return true
   }
 
@@ -1875,31 +1886,43 @@ appRoot.addEventListener('pointerdown', (event) => {
   const dragHandle = target.closest('[data-drag-handle="true"]')
   const nodeSpace = document.getElementById('node-space')
 
-  if (!(dragHandle instanceof HTMLElement) || !(nodeSpace instanceof HTMLElement)) {
+  if (dragHandle instanceof HTMLElement && nodeSpace instanceof HTMLElement) {
+    const nodeId = dragHandle.dataset.nodeId
+    const node = getNode(nodeId)
+
+    if (!node) {
+      return
+    }
+
+    const point = getCanvasPoint(event, nodeSpace)
+
+    dragState = {
+      nodeId,
+      offsetX: point.x - node.position.x,
+      offsetY: point.y - node.position.y
+    }
+
+    event.preventDefault()
     return
   }
 
-  const nodeId = dragHandle.dataset.nodeId
-  const node = getNode(nodeId)
-
-  if (!node) {
+  if (!(nodeSpace instanceof HTMLElement)) {
     return
   }
 
-  const nodeElement = dragHandle.closest('.node')
+  const panTarget = target.closest('#node-space')
 
-  if (!(nodeElement instanceof HTMLElement)) {
+  if (!(panTarget instanceof HTMLElement) || target.closest('.node') || isFormControl(target)) {
     return
   }
 
-  const nodeRect = nodeElement.getBoundingClientRect()
-  const spaceRect = nodeSpace.getBoundingClientRect()
-
-  dragState = {
-    nodeId,
-    offsetX: event.clientX - nodeRect.left + nodeSpace.scrollLeft - spaceRect.left,
-    offsetY: event.clientY - nodeRect.top + nodeSpace.scrollTop - spaceRect.top
+  panState = {
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    scrollLeft: nodeSpace.scrollLeft,
+    scrollTop: nodeSpace.scrollTop
   }
+  nodeSpace.classList.add('is-panning')
 
   event.preventDefault()
 })
@@ -1917,18 +1940,24 @@ document.addEventListener('pointermove', (event) => {
   }
 
   if (!dragState || !(nodeSpace instanceof HTMLElement)) {
+    if (panState && nodeSpace instanceof HTMLElement) {
+      nodeSpace.scrollLeft = panState.scrollLeft - (event.clientX - panState.pointerX)
+      nodeSpace.scrollTop = panState.scrollTop - (event.clientY - panState.pointerY)
+      updateWireLayer()
+    }
+
     return
   }
 
   const node = getNode(dragState.nodeId)
-  const spaceRect = nodeSpace.getBoundingClientRect()
 
   if (!node) {
     return
   }
 
-  node.position.x = Math.max(24, event.clientX - spaceRect.left + nodeSpace.scrollLeft - dragState.offsetX)
-  node.position.y = Math.max(24, event.clientY - spaceRect.top + nodeSpace.scrollTop - dragState.offsetY)
+  const point = getCanvasPoint(event, nodeSpace)
+  node.position.x = Math.max(24, point.x - dragState.offsetX)
+  node.position.y = Math.max(24, point.y - dragState.offsetY)
   updateNodeElementPosition(node.id)
 })
 
@@ -1955,7 +1984,14 @@ document.addEventListener('pointerup', (event) => {
   }
 
   dragState = null
+  panState = null
   wireDraft = null
+  const nodeSpace = document.getElementById('node-space')
+
+  if (nodeSpace instanceof HTMLElement) {
+    nodeSpace.classList.remove('is-panning')
+  }
+
   updateWireLayer()
 })
 
@@ -1963,4 +1999,12 @@ window.addEventListener('resize', () => {
   updateWireLayer()
 })
 
-render()
+appRoot.addEventListener('scroll', (event) => {
+  const target = event.target
+
+  if (target instanceof HTMLElement && target.id === 'node-space') {
+    updateWireLayer()
+  }
+}, true)
+
+void loadPersistedProfiles()
