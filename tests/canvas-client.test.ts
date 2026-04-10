@@ -18,9 +18,10 @@ describe('testCanvasRequest', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const response = await testCanvasRequest({
-      bearerToken: 'secret-token',
+      bearerToken: 'test-token-redacted',
       endpoint: '/api/v1/courses',
       method: 'GET',
+      profileId: 'profile-1',
       profileHost: 'https://canvas.example.edu',
       queryParameters: [{ id: 'param-1', name: 'search_term', value: 'history' }]
     });
@@ -29,12 +30,12 @@ describe('testCanvasRequest', () => {
       'https://canvas.example.edu/api/v1/courses?search_term=history'
     );
     expect(fetchMock.mock.calls[0]?.[1]).toEqual({
-      headers: {
-        accept: 'application/json',
-        authorization: 'Bearer secret-token'
-      },
-      method: 'GET'
-    });
+        headers: {
+          accept: 'application/json',
+          authorization: 'Bearer test-token-redacted'
+        },
+        method: 'GET'
+      });
     expect(response).toEqual({
       data: [{ id: 42, name: 'History 101' }],
       ok: true,
@@ -48,6 +49,7 @@ describe('testCanvasRequest', () => {
         bearerToken: '',
         endpoint: '/api/v1/courses',
         method: 'GET',
+        profileId: 'profile-1',
         profileHost: 'https://canvas.example.edu',
         queryParameters: []
       })
@@ -55,9 +57,10 @@ describe('testCanvasRequest', () => {
 
     await expect(
       testCanvasRequest({
-        bearerToken: 'secret-token',
+        bearerToken: 'test-token-redacted',
         endpoint: '/api/v1/courses',
         method: 'GET',
+        profileId: 'profile-1',
         profileHost: 'http://canvas.example.edu',
         queryParameters: []
       })
@@ -77,9 +80,10 @@ describe('testCanvasRequest', () => {
     );
 
     const response = await testCanvasRequest({
-      bearerToken: 'secret-token',
+      bearerToken: 'test-token-redacted',
       endpoint: '/api/v1/courses/9999',
       method: 'GET',
+      profileId: 'profile-1',
       profileHost: 'https://canvas.example.edu',
       queryParameters: []
     });

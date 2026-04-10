@@ -2,7 +2,14 @@ import { request as httpRequest } from 'node:http';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getProfileToken, loadProfiles, saveProfiles } from '../src/profile-store.js';
 import { startServer } from '../src/server.js';
+
+vi.mock('../src/profile-store.js', () => ({
+  getProfileToken: vi.fn(async () => 'test-token-redacted'),
+  loadProfiles: vi.fn(async () => []),
+  saveProfiles: vi.fn(async (profiles) => profiles)
+}));
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 
@@ -89,9 +96,9 @@ describe('startServer', () => {
 
     const response = await makeRequest(`${server.url}api/test-node`, {
       body: JSON.stringify({
-        bearerToken: 'secret-token',
         endpoint: '/api/v1/courses/11',
         method: 'GET',
+        profileId: 'profile-1',
         profileHost: 'https://canvas.example.edu',
         queryParameters: []
       }),
@@ -100,10 +107,112 @@ describe('startServer', () => {
     });
 
     expect(response.status).toBe(200);
+    expect(vi.mocked(getProfileToken)).toHaveBeenCalledWith('profile-1');
     expect(JSON.parse(response.body)).toEqual({
       data: { id: 11, name: 'Biology' },
       ok: true,
       status: 200
+    });
+  });
+
+  it('loads saved profiles through the local API', async () => {
+    vi.mocked(loadProfiles).mockResolvedValueOnce([
+      {
+        hasToken: true,
+        host: 'https://canvas.example.edu',
+        id: 'profile-1',
+        name: 'UWM Prod'
+      }
+    ]);
+
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/profiles`);
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      profiles: [
+        {
+          hasToken: true,
+          host: 'https://canvas.example.edu',
+          id: 'profile-1',
+          name: 'UWM Prod'
+        }
+      ]
+    });
+  });
+
+  it('saves profiles through the local API', async () => {
+    vi.mocked(saveProfiles).mockResolvedValueOnce([
+      {
+        hasToken: true,
+        host: 'https://canvas.example.edu',
+        id: 'profile-1',
+        name: 'UWM Prod'
+      }
+    ]);
+
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/profiles`, {
+      body: JSON.stringify({
+        profiles: [
+          {
+            hasToken: false,
+            host: 'https://canvas.example.edu',
+            id: 'profile-1',
+            name: 'UWM Prod',
+            token: 'test-token-redacted',
+            tokenAction: 'replace'
+          }
+        ]
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT'
+    });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(saveProfiles)).toHaveBeenCalledWith([
+      {
+        hasToken: false,
+        host: 'https://canvas.example.edu',
+        id: 'profile-1',
+        name: 'UWM Prod',
+        token: 'test-token-redacted',
+        tokenAction: 'replace'
+      }
+    ]);
+    expect(JSON.parse(response.body)).toEqual({
+      profiles: [
+        {
+          hasToken: true,
+          host: 'https://canvas.example.edu',
+          id: 'profile-1',
+          name: 'UWM Prod'
+        }
+      ]
+    });
+  });
+
+  it('rejects invalid profile save requests', async () => {
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/profiles`, {
+      body: JSON.stringify({
+        profiles: [{ id: 'profile-1' }]
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT'
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'Profile requests must include a profiles array with id, name, host, token, token state, and token availability fields.',
+      ok: false,
+      status: 400
     });
   });
 
