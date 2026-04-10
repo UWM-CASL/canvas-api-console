@@ -41,7 +41,7 @@ describe('profile-store', () => {
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'secret-token'
+        token: 'mock-keychain-token'
       }
     ]);
 
@@ -58,13 +58,13 @@ describe('profile-store', () => {
         name: 'UWM Prod'
       }
     ]);
-    expect(tokenStore.get('profile-1')).toBe('secret-token');
+    expect(tokenStore.get('profile-1')).toBe('mock-keychain-token');
     await expect(loadProfiles()).resolves.toEqual([
       {
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'secret-token'
+        token: 'mock-keychain-token'
       }
     ]);
   });
@@ -77,13 +77,13 @@ describe('profile-store', () => {
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'secret-token'
+        token: 'mock-keychain-token'
       },
       {
         host: 'https://canvas-test.example.edu',
         id: 'profile-2',
         name: 'UWM Test',
-        token: 'other-token'
+        token: 'second-mock-token'
       }
     ]);
 

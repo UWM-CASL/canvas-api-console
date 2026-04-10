@@ -119,7 +119,7 @@ describe('startServer', () => {
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'stored-token'
+        token: 'mock-bearer-token'
       }
     ]);
 
@@ -135,7 +135,7 @@ describe('startServer', () => {
           host: 'https://canvas.example.edu',
           id: 'profile-1',
           name: 'UWM Prod',
-          token: 'stored-token'
+          token: 'mock-bearer-token'
         }
       ]
     });
@@ -147,7 +147,7 @@ describe('startServer', () => {
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'stored-token'
+        token: 'mock-bearer-token'
       }
     ]);
 
@@ -161,7 +161,7 @@ describe('startServer', () => {
             host: 'https://canvas.example.edu',
             id: 'profile-1',
             name: 'UWM Prod',
-            token: 'stored-token'
+            token: 'mock-bearer-token'
           }
         ]
       }),
@@ -175,7 +175,7 @@ describe('startServer', () => {
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'stored-token'
+        token: 'mock-bearer-token'
       }
     ]);
     expect(JSON.parse(response.body)).toEqual({
@@ -184,7 +184,7 @@ describe('startServer', () => {
           host: 'https://canvas.example.edu',
           id: 'profile-1',
           name: 'UWM Prod',
-          token: 'stored-token'
+          token: 'mock-bearer-token'
         }
       ]
     });

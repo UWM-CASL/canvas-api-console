@@ -14,7 +14,7 @@ async function getKeytar() {
         const code = error instanceof Error && 'code' in error ? String(error.code) : '';
 
         if (code === 'ERR_DLOPEN_FAILED') {
-          throw new Error('Keychain support is unavailable because the required keytar system libraries are missing.');
+          throw new Error('Keychain support is unavailable because the required keytar system libraries are missing. Install the native keytar dependencies for your platform and try again.');
         }
 
         throw error;
