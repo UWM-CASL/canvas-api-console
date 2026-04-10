@@ -80,12 +80,16 @@ function normalizeErrorMessage(status: number, statusText: string, data: unknown
 async function readResponseData(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') ?? '';
 
-  if (contentType.includes('application/json')) {
-    return response.json();
-  }
+  try {
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
 
-  const text = await response.text();
-  return text || null;
+    const text = await response.text();
+    return text || null;
+  } catch {
+    throw new Error('Canvas returned a response that could not be parsed.');
+  }
 }
 
 export async function testCanvasRequest(request: TestNodeRequest): Promise<TestNodeResponse> {
@@ -124,7 +128,15 @@ export async function testCanvasRequest(request: TestNodeRequest): Promise<TestN
       ok: true,
       status: response.status
     };
-  } catch {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'Canvas returned a response that could not be parsed.') {
+      return {
+        error: error.message,
+        ok: false,
+        status: 502
+      };
+    }
+
     return {
       error: 'Unable to reach the selected Canvas host.',
       ok: false,

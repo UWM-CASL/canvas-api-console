@@ -16,6 +16,8 @@ const browserGlobals = {
   Blob: 'readonly',
   FileReader: 'readonly',
   HTMLInputElement: 'readonly',
+  HTMLSelectElement: 'readonly',
+  HTMLTextAreaElement: 'readonly',
   HTMLElement: 'readonly',
   SVGElement: 'readonly',
   document: 'readonly',

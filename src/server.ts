@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { HTTP_METHODS, type TestNodeRequest } from './api-contracts.js';
 import { renderApp } from './app.js';
 import { testCanvasRequest } from './canvas-client.js';
 import { DEFAULT_PORT } from './config.js';
@@ -58,6 +59,31 @@ function sendText(response: ServerResponse, statusCode: number, body: string, co
   response.end(body);
 }
 
+function isTestNodeRequest(value: unknown): value is TestNodeRequest {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return (
+    typeof candidate.bearerToken === 'string' &&
+    typeof candidate.endpoint === 'string' &&
+    typeof candidate.method === 'string' &&
+    HTTP_METHODS.includes(candidate.method as (typeof HTTP_METHODS)[number]) &&
+    typeof candidate.profileHost === 'string' &&
+    Array.isArray(candidate.queryParameters) &&
+    candidate.queryParameters.every(
+      (queryParameter) =>
+        queryParameter &&
+        typeof queryParameter === 'object' &&
+        typeof (queryParameter as Record<string, unknown>).id === 'string' &&
+        typeof (queryParameter as Record<string, unknown>).name === 'string' &&
+        typeof (queryParameter as Record<string, unknown>).value === 'string'
+    )
+  );
+}
+
 async function routeRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const method = request.method ?? 'GET';
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -80,7 +106,12 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse):
   if (method === 'POST' && pathname === '/api/test-node') {
     try {
       const requestBody = await readJsonBody(request);
-      const result = await testCanvasRequest(requestBody as Parameters<typeof testCanvasRequest>[0]);
+
+      if (!isTestNodeRequest(requestBody)) {
+        throw new Error('Test-node requests must include a host, token, endpoint, method, and query parameters.');
+      }
+
+      const result = await testCanvasRequest(requestBody);
       sendJson(response, result.ok ? 200 : 400, result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to test the node.';

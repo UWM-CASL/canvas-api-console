@@ -1,5 +1,9 @@
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const FIELD_TYPES = ['text', 'number', 'checkbox', 'date', 'select']
+const PROFILE_FIELDS = ['name', 'host', 'token']
+const API_NODE_FIELDS = ['endpoint', 'method', 'profileId']
+const START_FIELD_FIELDS = ['name', 'type', 'defaultValue', 'optionsText']
+const PARAM_FIELDS = ['name', 'value']
 
 const appRoot = document.getElementById('app')
 
@@ -113,11 +117,12 @@ function createProfile() {
 
 function createStartField() {
   const fieldId = `field-${state.nextIds.field++}`
+  const fieldNumber = numericSuffix(fieldId)
 
   return {
     defaultValue: '',
     id: fieldId,
-    name: `field_${state.nextIds.field - 1}`,
+    name: `field_${fieldNumber}`,
     optionsText: '',
     type: 'text'
   }
@@ -1034,7 +1039,11 @@ function loadQueryFromFile(file) {
 
   reader.addEventListener('load', () => {
     try {
-      const parsed = JSON.parse(String(reader.result ?? '{}'))
+      if (typeof reader.result !== 'string') {
+        throw new Error('Unable to read the selected .query.json file.')
+      }
+
+      const parsed = JSON.parse(reader.result)
       hydrateState(parsed)
       setStatus('Loaded a .query.json file. Bearer tokens must be re-entered locally.', 'success')
     } catch {
@@ -1182,6 +1191,10 @@ function computeNextIds(nextState) {
 }
 
 function numericSuffix(value) {
+  if (typeof value !== 'string') {
+    return 0
+  }
+
   const match = /-(\d+)$/.exec(value)
   return match ? Number(match[1]) : 0
 }
@@ -1281,15 +1294,23 @@ function stringifyParameterValue(value) {
   return JSON.stringify(value)
 }
 
+function isFormControl(target) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  )
+}
+
 function mutateControl(target) {
-  if (!(target instanceof HTMLElement)) {
+  if (!isFormControl(target)) {
     return
   }
 
   const profileId = target.dataset.profileId
   const profileField = target.dataset.profileField
 
-  if (profileId && profileField) {
+  if (profileId && profileField && PROFILE_FIELDS.includes(profileField)) {
     const profile = getProfile(profileId)
 
     if (profile) {
@@ -1303,7 +1324,7 @@ function mutateControl(target) {
   const nodeId = target.dataset.nodeId
   const nodeField = target.dataset.nodeField
 
-  if (nodeId && nodeField) {
+  if (nodeId && nodeField && API_NODE_FIELDS.includes(nodeField)) {
     const node = getNode(nodeId)
 
     if (node && node.type === 'api') {
@@ -1320,7 +1341,7 @@ function mutateControl(target) {
   const startFieldId = target.dataset.startFieldId
   const startFieldField = target.dataset.startFieldField
 
-  if (startFieldId && startFieldField) {
+  if (startFieldId && startFieldField && START_FIELD_FIELDS.includes(startFieldField)) {
     const startNode = getStartNode()
     const field = startNode?.fields.find((item) => item.id === startFieldId)
 
@@ -1362,7 +1383,7 @@ function mutateControl(target) {
   const paramId = target.dataset.paramId
   const paramField = target.dataset.paramField
 
-  if (nodeId && paramId && paramField) {
+  if (nodeId && paramId && paramField && PARAM_FIELDS.includes(paramField)) {
     const node = getNode(nodeId)
 
     if (node && node.type === 'api') {
