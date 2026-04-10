@@ -34,14 +34,16 @@ describe('profile-store', () => {
   });
 
   it('persists profile metadata to disk and tokens to the keychain', async () => {
-    const { loadProfiles, saveProfiles } = await import('../src/profile-store.js');
+    const { getProfileToken, loadProfiles, saveProfiles } = await import('../src/profile-store.js');
 
     await saveProfiles([
       {
+        hasToken: false,
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'mock-keychain-token'
+        token: 'mock-keychain-token',
+        tokenAction: 'replace'
       }
     ]);
 
@@ -61,12 +63,13 @@ describe('profile-store', () => {
     expect(tokenStore.get('profile-1')).toBe('mock-keychain-token');
     await expect(loadProfiles()).resolves.toEqual([
       {
+        hasToken: true,
         host: 'https://canvas.example.edu',
         id: 'profile-1',
-        name: 'UWM Prod',
-        token: 'mock-keychain-token'
+        name: 'UWM Prod'
       }
     ]);
+    await expect(getProfileToken('profile-1')).resolves.toBe('mock-keychain-token');
   });
 
   it('removes deleted profile tokens from the keychain', async () => {
@@ -74,25 +77,31 @@ describe('profile-store', () => {
 
     await saveProfiles([
       {
+        hasToken: false,
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: 'mock-keychain-token'
+        token: 'mock-keychain-token',
+        tokenAction: 'replace'
       },
       {
+        hasToken: false,
         host: 'https://canvas-test.example.edu',
         id: 'profile-2',
         name: 'UWM Test',
-        token: 'second-mock-token'
+        token: 'second-mock-token',
+        tokenAction: 'replace'
       }
     ]);
 
     await saveProfiles([
       {
+        hasToken: true,
         host: 'https://canvas.example.edu',
         id: 'profile-1',
         name: 'UWM Prod',
-        token: ''
+        token: '',
+        tokenAction: 'clear'
       }
     ]);
 

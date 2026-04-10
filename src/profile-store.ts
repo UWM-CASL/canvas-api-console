@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { deleteToken, getToken, listTokenProfileIds, saveToken } from './secrets.js';
+import { deleteToken, hasToken, listTokenProfileIds, saveToken, getToken } from './secrets.js';
 
 export interface StoredProfile {
   host: string;
@@ -10,13 +10,34 @@ export interface StoredProfile {
   name: string;
 }
 
-export interface SavedProfile extends StoredProfile {
+export interface ServerProfileState extends StoredProfile {
+  hasToken: boolean;
+}
+
+export interface SaveProfileInput extends ServerProfileState {
   token: string;
+  tokenAction: 'unchanged' | 'replace' | 'clear';
 }
 
 interface ProfileFilePayload {
   profiles: StoredProfile[];
   version: 1;
+}
+
+async function safeHasToken(profileId: string): Promise<boolean> {
+  try {
+    return await hasToken(profileId);
+  } catch {
+    return false;
+  }
+}
+
+async function safeListTokenProfileIds(): Promise<string[]> {
+  try {
+    return await listTokenProfileIds();
+  } catch {
+    return [];
+  }
 }
 
 function getConfigRoot(): string {
@@ -83,22 +104,22 @@ async function writeStoredProfiles(profiles: StoredProfile[]): Promise<void> {
   );
 }
 
-export async function loadProfiles(): Promise<SavedProfile[]> {
+export async function loadProfiles(): Promise<ServerProfileState[]> {
   const profiles = await readStoredProfiles();
 
   return Promise.all(
     profiles.map(async (profile) => ({
       ...profile,
-      token: await getToken(profile.id)
+      hasToken: await safeHasToken(profile.id)
     }))
   );
 }
 
-export async function saveProfiles(profiles: SavedProfile[]): Promise<SavedProfile[]> {
+export async function saveProfiles(profiles: SaveProfileInput[]): Promise<ServerProfileState[]> {
   const existingProfiles = await readStoredProfiles();
   const existingProfileIds = new Set([
     ...existingProfiles.map((profile) => profile.id),
-    ...(await listTokenProfileIds())
+    ...(await safeListTokenProfileIds())
   ]);
   const storedProfiles = profiles.map((profile) => ({
     host: profile.host,
@@ -109,7 +130,11 @@ export async function saveProfiles(profiles: SavedProfile[]): Promise<SavedProfi
   await writeStoredProfiles(storedProfiles);
 
   for (const profile of profiles) {
-    await saveToken(profile.id, profile.token);
+    if (profile.tokenAction === 'replace') {
+      await saveToken(profile.id, profile.token);
+    } else if (profile.tokenAction === 'clear') {
+      await deleteToken(profile.id);
+    }
   }
 
   const nextProfileIds = new Set(profiles.map((profile) => profile.id));
@@ -121,4 +146,8 @@ export async function saveProfiles(profiles: SavedProfile[]): Promise<SavedProfi
   }
 
   return loadProfiles();
+}
+
+export async function getProfileToken(profileId: string): Promise<string> {
+  return getToken(profileId);
 }

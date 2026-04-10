@@ -172,10 +172,12 @@ function createProfile() {
   const profileId = `profile-${state.nextIds.profile++}`
 
   return {
+    hasToken: false,
     host: '',
     id: profileId,
     name: `Server ${state.profiles.length + 1}`,
-    token: ''
+    token: '',
+    tokenDirty: false
   }
 }
 
@@ -382,8 +384,16 @@ function renderProfileCard(profile) {
       </label>
       <label class="control-group">
         <span>Bearer token</span>
-        <input type="password" autocomplete="off" placeholder="Stored in your device keychain" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
+        <input type="password" autocomplete="off" placeholder="${profile.hasToken ? 'Saved in your device keychain' : 'Enter a token to save to the device keychain'}" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
       </label>
+      <div class="inline-actions">
+        ${profile.hasToken
+          ? '<span class="connection-label">A token is saved in the device keychain.</span>'
+          : '<span class="connection-label">No token is saved for this profile yet.</span>'}
+        ${profile.hasToken
+          ? `<button class="ghost-button" type="button" data-action="clear-profile-token" data-profile-id="${profile.id}">Clear saved token</button>`
+          : ''}
+      </div>
       <div class="card-note">Query Builder nodes can select this profile when testing Canvas endpoints.</div>
     </section>
   `
@@ -1044,10 +1054,12 @@ async function loadPersistedProfiles() {
     }
 
     state.profiles = payload.profiles.map((profile, index) => ({
+      hasToken: Boolean(profile.hasToken),
       host: typeof profile.host === 'string' ? profile.host : '',
       id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
       name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`,
-      token: typeof profile.token === 'string' ? profile.token : ''
+      token: '',
+      tokenDirty: false
     }))
     state.nextIds = computeNextIds(state)
   } catch {
@@ -1063,10 +1075,16 @@ async function loadPersistedProfiles() {
 function buildProfileSaveRequest() {
   return {
     profiles: state.profiles.map((profile) => ({
+      hasToken: Boolean(profile.hasToken),
       host: profile.host,
       id: profile.id,
       name: profile.name,
-      token: profile.token
+      token: profile.token,
+      tokenAction: profile.tokenDirty
+        ? profile.token.trim()
+          ? 'replace'
+          : 'clear'
+        : 'unchanged'
     }))
   }
 }
@@ -1089,28 +1107,32 @@ async function persistProfiles(options = {}) {
     }
 
     state.profiles = payload.profiles.map((profile, index) => ({
+      hasToken: Boolean(profile.hasToken),
       host: typeof profile.host === 'string' ? profile.host : '',
       id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
       name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`,
-      token: typeof profile.token === 'string' ? profile.token : ''
+      token: '',
+      tokenDirty: false
     }))
     state.nextIds = computeNextIds(state)
 
     if (announce) {
       setStatus(successMessage, 'success')
-      return
+      return true
     }
 
     render()
+    return true
   } catch {
     setStatus('Unable to save server profiles locally.', 'error')
+    return false
   }
 }
 
 function queueProfileSave() {
   window.clearTimeout(profileSaveTimer)
   profileSaveTimer = window.setTimeout(() => {
-    void persistProfiles()
+    void persistProfiles({ announce: true, successMessage: 'Saved server profile changes locally.' })
   }, PROFILE_SAVE_DELAY_MS)
 }
 
@@ -1292,10 +1314,12 @@ function hydrateState(parsed) {
 
   if (Array.isArray(parsed.profiles)) {
     nextState.profiles = parsed.profiles.map((profile, index) => ({
+      hasToken: false,
       host: typeof profile.host === 'string' ? profile.host : '',
       id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
       name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`,
-      token: ''
+      token: '',
+      tokenDirty: false
     }))
   }
 
@@ -1446,6 +1470,14 @@ async function testNode(nodeId) {
     return
   }
 
+  if (profile.tokenDirty) {
+    const didPersist = await persistProfiles()
+
+    if (!didPersist) {
+      return
+    }
+  }
+
   node.testing = true
   render()
 
@@ -1459,9 +1491,9 @@ async function testNode(nodeId) {
       .filter((param) => param.name)
     const response = await fetch('/api/test-node', {
       body: JSON.stringify({
-        bearerToken: profile.token,
         endpoint: node.endpoint,
         method: node.method,
+        profileId: profile.id,
         profileHost: profile.host,
         queryParameters
       }),
@@ -1535,7 +1567,7 @@ function isFormControl(target) {
   )
 }
 
-function mutateControl(target) {
+function mutateControl(target, eventType = 'input') {
   if (!isFormControl(target)) {
     return
   }
@@ -1548,6 +1580,16 @@ function mutateControl(target) {
 
     if (profile) {
       profile[profileField] = target.value
+      if (profileField === 'token') {
+        profile.tokenDirty = true
+        render()
+
+        if (eventType === 'change') {
+          queueProfileSave()
+        }
+
+        return
+      }
       render()
       queueProfileSave()
     }
@@ -1706,6 +1748,20 @@ function handleAction(target) {
     return true
   }
 
+  if (action === 'clear-profile-token') {
+    const profile = getProfile(actionTarget.dataset.profileId)
+
+    if (profile) {
+      profile.hasToken = false
+      profile.token = ''
+      profile.tokenDirty = true
+      render()
+      void persistProfiles({ announce: true, successMessage: 'Cleared the saved bearer token for this profile.' })
+    }
+
+    return true
+  }
+
   if (action === 'set-query-view') {
     state.queryView = actionTarget.dataset.queryView
     render()
@@ -1841,7 +1897,7 @@ appRoot.addEventListener('click', (event) => {
 })
 
 appRoot.addEventListener('input', (event) => {
-  mutateControl(event.target)
+  mutateControl(event.target, 'input')
 })
 
 appRoot.addEventListener('change', (event) => {
@@ -1853,7 +1909,7 @@ appRoot.addEventListener('change', (event) => {
     return
   }
 
-  mutateControl(target)
+  mutateControl(target, 'change')
 })
 
 appRoot.addEventListener('pointerdown', (event) => {

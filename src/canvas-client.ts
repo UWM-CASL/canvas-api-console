@@ -1,8 +1,8 @@
 import {
   HTTP_METHODS,
+  type CanvasTestRequest,
   type HttpMethod,
   type QueryParameter,
-  type TestNodeRequest,
   type TestNodeResponse
 } from './api-contracts.js';
 
@@ -92,7 +92,7 @@ async function readResponseData(response: Response): Promise<unknown> {
   }
 }
 
-export async function testCanvasRequest(request: TestNodeRequest): Promise<TestNodeResponse> {
+export async function testCanvasRequest(request: CanvasTestRequest): Promise<TestNodeResponse> {
   const host = normalizeHost(request.profileHost);
   const endpoint = normalizeEndpoint(request.endpoint);
   const method = normalizeMethod(request.method);

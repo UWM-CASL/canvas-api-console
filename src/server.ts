@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import { HTTP_METHODS, type SaveProfilesRequest, type ServerProfile, type TestNodeRequest } from './api-contracts.js';
+import { HTTP_METHODS, type SaveProfilesRequest, type SaveServerProfile, type ServerProfile, type TestNodeRequest } from './api-contracts.js';
 import { renderApp } from './app.js';
 import { testCanvasRequest } from './canvas-client.js';
 import { DEFAULT_PORT } from './config.js';
-import { loadProfiles, saveProfiles } from './profile-store.js';
+import { getProfileToken, loadProfiles, saveProfiles } from './profile-store.js';
 
 const browserScript = readFileSync(new URL('./browser-app.js', import.meta.url), 'utf8');
 const browserStyles = readFileSync(new URL('./browser-app.css', import.meta.url), 'utf8');
@@ -68,10 +68,10 @@ function isTestNodeRequest(value: unknown): value is TestNodeRequest {
   const candidate = value as Record<string, unknown>;
 
   return (
-    typeof candidate.bearerToken === 'string' &&
     typeof candidate.endpoint === 'string' &&
     typeof candidate.method === 'string' &&
     HTTP_METHODS.includes(candidate.method as (typeof HTTP_METHODS)[number]) &&
+    typeof candidate.profileId === 'string' &&
     typeof candidate.profileHost === 'string' &&
     Array.isArray(candidate.queryParameters) &&
     candidate.queryParameters.every(
@@ -94,9 +94,22 @@ function isServerProfile(value: unknown): value is ServerProfile {
 
   return (
     typeof candidate.host === 'string' &&
+    typeof candidate.hasToken === 'boolean' &&
     typeof candidate.id === 'string' &&
-    typeof candidate.name === 'string' &&
-    typeof candidate.token === 'string'
+    typeof candidate.name === 'string'
+  );
+}
+
+function isSaveServerProfile(value: unknown): value is SaveServerProfile {
+  if (!isServerProfile(value)) {
+    return false;
+  }
+
+  const candidate = value as unknown as Record<string, unknown>;
+
+  return (
+    typeof candidate.token === 'string' &&
+    (candidate.tokenAction === 'unchanged' || candidate.tokenAction === 'replace' || candidate.tokenAction === 'clear')
   );
 }
 
@@ -106,7 +119,7 @@ function isSaveProfilesRequest(value: unknown): value is SaveProfilesRequest {
   }
 
   const candidate = value as Record<string, unknown>;
-  return Array.isArray(candidate.profiles) && candidate.profiles.every((profile) => isServerProfile(profile));
+  return Array.isArray(candidate.profiles) && candidate.profiles.every((profile) => isSaveServerProfile(profile));
 }
 
 async function routeRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -133,10 +146,19 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse):
       const requestBody = await readJsonBody(request);
 
       if (!isTestNodeRequest(requestBody)) {
-        throw new Error('Test-node requests must include a host, token, endpoint, method, and query parameters.');
+        throw new Error('Test-node requests must include a host, profile, endpoint, method, and query parameters.');
       }
 
-      const result = await testCanvasRequest(requestBody);
+      const bearerToken = await getProfileToken(requestBody.profileId);
+
+      if (!bearerToken) {
+        throw new Error('Add a bearer token to the selected server profile before testing a node.');
+      }
+
+      const result = await testCanvasRequest({
+        ...requestBody,
+        bearerToken
+      });
       sendJson(response, result.ok ? 200 : 400, result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to test the node.';
@@ -161,7 +183,7 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse):
       const requestBody = await readJsonBody(request);
 
       if (!isSaveProfilesRequest(requestBody)) {
-        throw new Error('Profile requests must include a profiles array with id, name, host, and token fields.');
+        throw new Error('Profile requests must include a profiles array with id, name, host, token, token state, and token availability fields.');
       }
 
       sendJson(response, 200, {

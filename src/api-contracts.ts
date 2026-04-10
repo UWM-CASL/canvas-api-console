@@ -10,21 +10,30 @@ export interface QueryParameter {
 
 export interface ServerProfile {
   host: string;
+  hasToken: boolean;
   id: string;
   name: string;
+}
+
+export interface SaveServerProfile extends ServerProfile {
   token: string;
+  tokenAction: 'unchanged' | 'replace' | 'clear';
 }
 
 export interface SaveProfilesRequest {
-  profiles: ServerProfile[];
+  profiles: SaveServerProfile[];
 }
 
 export interface TestNodeRequest {
-  bearerToken: string;
   endpoint: string;
   method: HttpMethod;
+  profileId: string;
   profileHost: string;
   queryParameters: QueryParameter[];
+}
+
+export interface CanvasTestRequest extends TestNodeRequest {
+  bearerToken: string;
 }
 
 export type TestNodeResponse =
