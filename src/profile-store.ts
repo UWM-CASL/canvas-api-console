@@ -2,22 +2,22 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { deleteToken, hasToken, listTokenProfileIds, saveToken, getToken } from './secrets.js';
+import { deleteToken, getToken, hasToken, listTokenProfileIds, saveToken } from './secrets.js';
+import {
+  normalizeProfileCollection,
+  normalizeProfileSaveRecord,
+  normalizeStoredProfile,
+  type ProfileRecord,
+  type ProfileSaveRecord
+} from './profile-model.js';
 
-export interface StoredProfile {
-  host: string;
-  id: string;
-  name: string;
-}
+export type StoredProfile = ProfileRecord;
 
 export interface ServerProfileState extends StoredProfile {
   hasToken: boolean;
 }
 
-export interface SaveProfileInput extends ServerProfileState {
-  token: string;
-  tokenAction: 'unchanged' | 'replace' | 'clear';
-}
+export interface SaveProfileInput extends ServerProfileState, ProfileSaveRecord {}
 
 interface ProfileFilePayload {
   profiles: StoredProfile[];
@@ -71,13 +71,15 @@ async function readStoredProfiles(): Promise<StoredProfile[]> {
       return [];
     }
 
-    return parsed.profiles
-      .filter((profile) => profile && typeof profile === 'object')
-      .map((profile, index) => ({
-        host: typeof profile.host === 'string' ? profile.host : '',
-        id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
-        name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`
-      }));
+    return normalizeProfileCollection(
+      parsed.profiles
+        .filter((profile) => profile && typeof profile === 'object')
+        .map((profile, index) => ({
+          host: typeof profile.host === 'string' ? profile.host : '',
+          id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
+          name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`
+        }))
+    );
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
       return [];
@@ -104,6 +106,59 @@ async function writeStoredProfiles(profiles: StoredProfile[]): Promise<void> {
   );
 }
 
+async function captureTokenSnapshots(profileIds: Iterable<string>): Promise<Map<string, string | null>> {
+  const snapshots = new Map<string, string | null>();
+
+  for (const profileId of profileIds) {
+    const token = await getToken(profileId);
+    snapshots.set(profileId, token || null);
+  }
+
+  return snapshots;
+}
+
+async function restoreTokenSnapshots(snapshots: Map<string, string | null>): Promise<void> {
+  for (const [profileId, token] of snapshots.entries()) {
+    if (token) {
+      await saveToken(profileId, token);
+      continue;
+    }
+
+    await deleteToken(profileId);
+  }
+}
+
+function formatRollbackError(originalError: unknown, rollbackError: unknown): Error {
+  const originalMessage = originalError instanceof Error ? originalError.message : String(originalError);
+  const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+
+  return new Error(`${originalMessage} Rollback also failed: ${rollbackMessage}`);
+}
+
+async function applyProfileTokenChanges(
+  profiles: SaveProfileInput[],
+  existingProfileIds: Set<string>
+): Promise<void> {
+  for (const profile of profiles) {
+    if (profile.tokenAction === 'replace') {
+      await saveToken(profile.id, profile.token);
+      continue;
+    }
+
+    if (profile.tokenAction === 'clear') {
+      await deleteToken(profile.id);
+    }
+  }
+
+  const nextProfileIds = new Set(profiles.map((profile) => profile.id));
+
+  for (const profileId of existingProfileIds) {
+    if (!nextProfileIds.has(profileId)) {
+      await deleteToken(profileId);
+    }
+  }
+}
+
 export async function loadProfiles(): Promise<ServerProfileState[]> {
   const profiles = await readStoredProfiles();
 
@@ -116,33 +171,39 @@ export async function loadProfiles(): Promise<ServerProfileState[]> {
 }
 
 export async function saveProfiles(profiles: SaveProfileInput[]): Promise<ServerProfileState[]> {
+  const normalizedProfiles = normalizeProfileCollection(
+    profiles.map((profile) => ({
+      ...profile,
+      ...normalizeProfileSaveRecord(profile)
+    }))
+  );
   const existingProfiles = await readStoredProfiles();
   const existingProfileIds = new Set([
     ...existingProfiles.map((profile) => profile.id),
     ...(await safeListTokenProfileIds())
   ]);
-  const storedProfiles = profiles.map((profile) => ({
-    host: profile.host,
-    id: profile.id,
-    name: profile.name
-  }));
+  const tokenSnapshots = await captureTokenSnapshots(
+    new Set([...existingProfileIds, ...normalizedProfiles.map((profile) => profile.id)])
+  );
+  const storedProfiles = normalizedProfiles.map((profile) =>
+    normalizeStoredProfile({
+      host: profile.host,
+      id: profile.id,
+      name: profile.name
+    })
+  );
 
-  await writeStoredProfiles(storedProfiles);
-
-  for (const profile of profiles) {
-    if (profile.tokenAction === 'replace') {
-      await saveToken(profile.id, profile.token);
-    } else if (profile.tokenAction === 'clear') {
-      await deleteToken(profile.id);
+  try {
+    await applyProfileTokenChanges(normalizedProfiles, existingProfileIds);
+    await writeStoredProfiles(storedProfiles);
+  } catch (error: unknown) {
+    try {
+      await restoreTokenSnapshots(tokenSnapshots);
+    } catch (rollbackError: unknown) {
+      throw formatRollbackError(error, rollbackError);
     }
-  }
 
-  const nextProfileIds = new Set(profiles.map((profile) => profile.id));
-
-  for (const profileId of existingProfileIds) {
-    if (!nextProfileIds.has(profileId)) {
-      await deleteToken(profileId);
-    }
+    throw error;
   }
 
   return loadProfiles();
@@ -150,4 +211,9 @@ export async function saveProfiles(profiles: SaveProfileInput[]): Promise<Server
 
 export async function getProfileToken(profileId: string): Promise<string> {
   return getToken(profileId);
+}
+
+export async function getStoredProfile(profileId: string): Promise<StoredProfile | null> {
+  const profiles = await readStoredProfiles();
+  return profiles.find((profile) => profile.id === profileId) ?? null;
 }

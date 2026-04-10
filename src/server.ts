@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import { HTTP_METHODS, type SaveProfilesRequest, type SaveServerProfile, type ServerProfile, type TestNodeRequest } from './api-contracts.js';
+import { HTTP_METHODS, type SaveProfilesRequest, type SaveServerProfile, type ServerProfile } from './api-contracts.js';
 import { renderApp } from './app.js';
 import { testCanvasRequest } from './canvas-client.js';
 import { DEFAULT_PORT } from './config.js';
-import { getProfileToken, loadProfiles, saveProfiles } from './profile-store.js';
+import { getProfileToken, getStoredProfile, loadProfiles, saveProfiles } from './profile-store.js';
+import type { TestNodeRequest } from './request-contracts.js';
 
 const browserScript = readFileSync(new URL('./browser-app.js', import.meta.url), 'utf8');
 const browserStyles = readFileSync(new URL('./browser-app.css', import.meta.url), 'utf8');
@@ -72,7 +73,6 @@ function isTestNodeRequest(value: unknown): value is TestNodeRequest {
     typeof candidate.method === 'string' &&
     HTTP_METHODS.includes(candidate.method as (typeof HTTP_METHODS)[number]) &&
     typeof candidate.profileId === 'string' &&
-    typeof candidate.profileHost === 'string' &&
     Array.isArray(candidate.queryParameters) &&
     candidate.queryParameters.every(
       (queryParameter) =>
@@ -146,7 +146,13 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse):
       const requestBody = await readJsonBody(request);
 
       if (!isTestNodeRequest(requestBody)) {
-        throw new Error('Test-node requests must include a host, profile, endpoint, method, and query parameters.');
+        throw new Error('Test-node requests must include a saved profile, endpoint, method, and query parameters.');
+      }
+
+      const profile = await getStoredProfile(requestBody.profileId);
+
+      if (!profile) {
+        throw new Error('Select a saved server profile before testing a node.');
       }
 
       const bearerToken = await getProfileToken(requestBody.profileId);
@@ -156,10 +162,13 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse):
       }
 
       const result = await testCanvasRequest({
-        ...requestBody,
-        bearerToken
+        bearerToken,
+        endpoint: requestBody.endpoint,
+        method: requestBody.method,
+        profileHost: profile.host,
+        queryParameters: requestBody.queryParameters
       });
-      sendJson(response, result.ok ? 200 : 400, result);
+      sendJson(response, result.ok ? 200 : result.status >= 400 ? result.status : 502, result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to test the node.';
       sendJson(response, 400, {

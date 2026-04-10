@@ -1494,7 +1494,6 @@ async function testNode(nodeId) {
         endpoint: node.endpoint,
         method: node.method,
         profileId: profile.id,
-        profileHost: profile.host,
         queryParameters
       }),
       headers: {

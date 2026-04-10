@@ -21,7 +21,6 @@ describe('testCanvasRequest', () => {
       bearerToken: 'test-token-redacted',
       endpoint: '/api/v1/courses',
       method: 'GET',
-      profileId: 'profile-1',
       profileHost: 'https://canvas.example.edu',
       queryParameters: [{ id: 'param-1', name: 'search_term', value: 'history' }]
     });
@@ -49,7 +48,6 @@ describe('testCanvasRequest', () => {
         bearerToken: '',
         endpoint: '/api/v1/courses',
         method: 'GET',
-        profileId: 'profile-1',
         profileHost: 'https://canvas.example.edu',
         queryParameters: []
       })
@@ -60,11 +58,10 @@ describe('testCanvasRequest', () => {
         bearerToken: 'test-token-redacted',
         endpoint: '/api/v1/courses',
         method: 'GET',
-        profileId: 'profile-1',
         profileHost: 'http://canvas.example.edu',
         queryParameters: []
       })
-    ).rejects.toThrow('Server profiles must use HTTPS.');
+    ).rejects.toThrow('Canvas host must use HTTPS.');
   });
 
   it('normalizes Canvas API errors without exposing raw request details', async () => {
@@ -83,7 +80,6 @@ describe('testCanvasRequest', () => {
       bearerToken: 'test-token-redacted',
       endpoint: '/api/v1/courses/9999',
       method: 'GET',
-      profileId: 'profile-1',
       profileHost: 'https://canvas.example.edu',
       queryParameters: []
     });

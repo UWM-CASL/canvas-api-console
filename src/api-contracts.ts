@@ -24,18 +24,6 @@ export interface SaveProfilesRequest {
   profiles: SaveServerProfile[];
 }
 
-export interface TestNodeRequest {
-  endpoint: string;
-  method: HttpMethod;
-  profileId: string;
-  profileHost: string;
-  queryParameters: QueryParameter[];
-}
-
-export interface CanvasTestRequest extends TestNodeRequest {
-  bearerToken: string;
-}
-
 export type TestNodeResponse =
   | {
       data: unknown;

@@ -1,10 +1,11 @@
 import {
   HTTP_METHODS,
-  type CanvasTestRequest,
   type HttpMethod,
   type QueryParameter,
   type TestNodeResponse
 } from './api-contracts.js';
+import { normalizeProfileHost } from './profile-model.js';
+import type { CanvasTestRequest } from './request-contracts.js';
 
 function normalizeMethod(method: string): HttpMethod {
   const normalizedMethod = method.toUpperCase();
@@ -17,23 +18,7 @@ function normalizeMethod(method: string): HttpMethod {
 }
 
 function normalizeHost(profileHost: string): URL {
-  let url: URL;
-
-  try {
-    url = new URL(profileHost);
-  } catch {
-    throw new Error('Server profiles must use a valid HTTPS host.');
-  }
-
-  if (url.protocol !== 'https:') {
-    throw new Error('Server profiles must use HTTPS.');
-  }
-
-  url.pathname = '/';
-  url.search = '';
-  url.hash = '';
-
-  return url;
+  return new URL(`${normalizeProfileHost(profileHost)}/`);
 }
 
 function normalizeEndpoint(endpoint: string): string {

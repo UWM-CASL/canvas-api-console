@@ -2,10 +2,15 @@ import { request as httpRequest } from 'node:http';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getProfileToken, loadProfiles, saveProfiles } from '../src/profile-store.js';
+import { getProfileToken, getStoredProfile, loadProfiles, saveProfiles } from '../src/profile-store.js';
 import { startServer } from '../src/server.js';
 
 vi.mock('../src/profile-store.js', () => ({
+  getStoredProfile: vi.fn(async () => ({
+    host: 'https://canvas.example.edu',
+    id: 'profile-1',
+    name: 'UWM Prod'
+  })),
   getProfileToken: vi.fn(async () => 'test-token-redacted'),
   loadProfiles: vi.fn(async () => []),
   saveProfiles: vi.fn(async (profiles) => profiles)
@@ -99,7 +104,6 @@ describe('startServer', () => {
         endpoint: '/api/v1/courses/11',
         method: 'GET',
         profileId: 'profile-1',
-        profileHost: 'https://canvas.example.edu',
         queryParameters: []
       }),
       headers: { 'content-type': 'application/json' },
@@ -112,6 +116,31 @@ describe('startServer', () => {
       data: { id: 11, name: 'Biology' },
       ok: true,
       status: 200
+    });
+  });
+
+  it('rejects test-node requests for unknown saved profiles', async () => {
+    vi.mocked(getStoredProfile).mockResolvedValueOnce(null);
+
+    const server = await startServer({ port: 0 });
+    servers.push(server);
+
+    const response = await makeRequest(`${server.url}api/test-node`, {
+      body: JSON.stringify({
+        endpoint: '/api/v1/courses/11',
+        method: 'GET',
+        profileId: 'profile-missing',
+        queryParameters: []
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST'
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'Select a saved server profile before testing a node.',
+      ok: false,
+      status: 400
     });
   });
 
