@@ -11,6 +11,19 @@ const sharedGlobals = {
   clearTimeout: 'readonly'
 };
 
+const browserGlobals = {
+  ...sharedGlobals,
+  Blob: 'readonly',
+  FileReader: 'readonly',
+  HTMLInputElement: 'readonly',
+  HTMLSelectElement: 'readonly',
+  HTMLTextAreaElement: 'readonly',
+  HTMLElement: 'readonly',
+  SVGElement: 'readonly',
+  document: 'readonly',
+  window: 'readonly'
+};
+
 export default [
   {
     ignores: ['dist/**', 'coverage/**', 'node_modules/**']
@@ -40,6 +53,15 @@ export default [
     },
     rules: {
       ...tseslint.configs.recommended.rules
+    }
+  },
+  {
+    files: ['src/browser-app.js'],
+    languageOptions: {
+      ...js.configs.recommended.languageOptions,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: browserGlobals
     }
   },
   {

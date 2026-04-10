@@ -25,6 +25,16 @@ On first launch, the script prepares the device by installing dependencies and b
 
 If the project was downloaded as a zip instead of cloned with git, the update check is skipped and the app still launches locally.
 
+## Current UI
+
+The local app now includes:
+
+- a left navigation with **Servers** and **Query Builder** tabs
+- server profiles with host fields and masked bearer-token inputs that stay in memory only
+- a draggable query-builder node workspace with start, query, and end nodes
+- a companion output view that renders start-field controls and end-node results
+- export and import support for sanitized `.query.json` wireframes
+
 ## Development commands
 
 ```bash
