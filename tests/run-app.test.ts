@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { canCheckForUpdates, getOpenCommand, shouldInstallDependencies } from '../scripts/run-app.mjs';
+import {
+  canCheckForUpdates,
+  didGitRevisionChange,
+  getOpenCommand,
+  shouldInstallDependencies
+} from '../scripts/run-app.mjs';
 
 describe('run-app helpers', () => {
   it('only enables update checks for git checkouts with git installed', () => {
@@ -19,6 +24,18 @@ describe('run-app helpers', () => {
     expect(
       shouldInstallDependencies({ gitUpdated: false, hasNodeModules: true, hasPackageJson: true })
     ).toBe(false);
+  });
+
+  it('only treats git pull as an update when the checked out revision changes', () => {
+    expect(didGitRevisionChange({ previousRevision: 'abc123', currentRevision: 'def456' })).toBe(
+      true
+    );
+    expect(didGitRevisionChange({ previousRevision: 'abc123', currentRevision: 'abc123' })).toBe(
+      false
+    );
+    expect(didGitRevisionChange({ previousRevision: null, currentRevision: 'def456' })).toBe(
+      false
+    );
   });
 
   it('uses platform-appropriate browser commands', () => {
