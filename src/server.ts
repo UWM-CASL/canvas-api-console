@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
 import { renderApp } from './app.js';
 import { DEFAULT_PORT } from './config.js';
@@ -15,7 +15,7 @@ export interface RunningServer {
 }
 
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
-  const server = createServer((request, response) => {
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     if (request.url !== '/') {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       response.end('Not found');
@@ -40,7 +40,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     url: `http://127.0.0.1:${address.port}/`,
     close: async () => {
       await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
+        server.close((error?: Error) => {
           if (error) {
             reject(error);
             return;

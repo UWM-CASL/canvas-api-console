@@ -26,7 +26,7 @@ export function getOpenCommand(url, platform) {
 function runCommand(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd,
-    stdio: 'inherit',
+    stdio: options.stdio ?? 'inherit',
     env: process.env
   });
 
@@ -70,7 +70,7 @@ async function main() {
 
   runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], { cwd: repoRoot });
 
-  const { startServer } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'server.js')).href);
+  const { startServer } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'src', 'server.js')).href);
   const requestedPort = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : undefined;
   const runningServer = await startServer(Number.isNaN(requestedPort) ? {} : { port: requestedPort });
 
@@ -78,7 +78,7 @@ async function main() {
 
   try {
     const openCommand = getOpenCommand(runningServer.url, process.platform);
-    runCommand(openCommand.command, openCommand.args, { cwd: repoRoot });
+    runCommand(openCommand.command, openCommand.args, { cwd: repoRoot, stdio: 'ignore' });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`Unable to open a browser automatically: ${message}`);
