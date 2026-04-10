@@ -11,6 +11,10 @@ export function shouldInstallDependencies({ gitUpdated, hasNodeModules, hasPacka
   return gitUpdated || (hasPackageJson && !hasNodeModules);
 }
 
+export function didGitRevisionChange({ previousRevision, currentRevision }) {
+  return Boolean(previousRevision && currentRevision && previousRevision !== currentRevision);
+}
+
 export function getOpenCommand(url, platform) {
   if (platform === 'darwin') {
     return { command: 'open', args: [url] };
@@ -45,6 +49,21 @@ function tryRunCommand(command, args, options = {}) {
   return result.status === 0;
 }
 
+function getGitRevision(cwd) {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: process.env,
+    encoding: 'utf8'
+  });
+
+  if (result.status !== 0) {
+    return null;
+  }
+
+  return result.stdout.trim();
+}
+
 async function main() {
   const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
   const hasGitDirectory = existsSync(path.join(repoRoot, '.git'));
@@ -52,12 +71,16 @@ async function main() {
   const hasNodeModules = existsSync(path.join(repoRoot, 'node_modules'));
   const hasGitBinary = tryRunCommand('git', ['--version'], { cwd: repoRoot });
   const updateEnabled = canCheckForUpdates({ hasGitBinary, hasGitDirectory });
+  const previousGitRevision = updateEnabled ? getGitRevision(repoRoot) : null;
   let gitUpdated = false;
 
   if (updateEnabled) {
     try {
       runCommand('git', ['pull', '--ff-only'], { cwd: repoRoot });
-      gitUpdated = true;
+      gitUpdated = didGitRevisionChange({
+        previousRevision: previousGitRevision,
+        currentRevision: getGitRevision(repoRoot)
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`Skipping automatic update: ${message}`);

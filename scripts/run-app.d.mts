@@ -9,6 +9,11 @@ export function shouldInstallDependencies(input: {
   hasPackageJson: boolean;
 }): boolean;
 
+export function didGitRevisionChange(input: {
+  previousRevision: string | null;
+  currentRevision: string | null;
+}): boolean;
+
 export function getOpenCommand(
   url: string,
   platform: NodeJS.Platform
