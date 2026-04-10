@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canCheckForUpdates,
   didGitRevisionChange,
+  getNpmCommand,
   getOpenCommand,
   shouldInstallDependencies
 } from '../scripts/run-app.mjs';
@@ -50,6 +51,17 @@ describe('run-app helpers', () => {
     expect(getOpenCommand('http://127.0.0.1:3210/', 'linux')).toEqual({
       command: 'xdg-open',
       args: ['http://127.0.0.1:3210/']
+    });
+  });
+
+  it('uses npm in a Windows-compatible way', () => {
+    expect(getNpmCommand('win32')).toEqual({
+      command: 'npm',
+      shell: true
+    });
+    expect(getNpmCommand('linux')).toEqual({
+      command: 'npm',
+      shell: false
     });
   });
 });

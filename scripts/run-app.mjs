@@ -27,11 +27,19 @@ export function getOpenCommand(url, platform) {
   return { command: 'xdg-open', args: [url] };
 }
 
+export function getNpmCommand(platform) {
+  return {
+    command: 'npm',
+    shell: platform === 'win32'
+  };
+}
+
 function runCommand(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     stdio: options.stdio ?? 'inherit',
-    env: process.env
+    env: process.env,
+    shell: options.shell ?? false
   });
 
   if (result.status !== 0) {
@@ -71,6 +79,7 @@ async function main() {
   const hasNodeModules = existsSync(path.join(repoRoot, 'node_modules'));
   const hasGitBinary = tryRunCommand('git', ['--version'], { cwd: repoRoot });
   const updateEnabled = canCheckForUpdates({ hasGitBinary, hasGitDirectory });
+  const npmCommand = getNpmCommand(process.platform);
   const previousGitRevision = updateEnabled ? getGitRevision(repoRoot) : null;
   let gitUpdated = false;
 
@@ -88,10 +97,10 @@ async function main() {
   }
 
   if (shouldInstallDependencies({ gitUpdated, hasNodeModules, hasPackageJson })) {
-    runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install'], { cwd: repoRoot });
+    runCommand(npmCommand.command, ['install'], { cwd: repoRoot, shell: npmCommand.shell });
   }
 
-  runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], { cwd: repoRoot });
+  runCommand(npmCommand.command, ['run', 'build'], { cwd: repoRoot, shell: npmCommand.shell });
 
   const { startServer } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'src', 'server.js')).href);
   const requestedPort = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : undefined;

@@ -21,3 +21,8 @@ export function getOpenCommand(
   command: string;
   args: string[];
 };
+
+export function getNpmCommand(platform: NodeJS.Platform): {
+  command: string;
+  shell: boolean;
+};
