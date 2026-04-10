@@ -1,0 +1,36 @@
+{
+  "name": "canvas-api-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first Canvas API console for authorized administrators.",
+  "type": "module",
+  "scripts": {
+    "app": "node ./scripts/run-app.mjs",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "start": "node ./dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UWM-CASL/canvas-api-console.git"
+  },
+  "bugs": {
+    "url": "https://github.com/UWM-CASL/canvas-api-console/issues"
+  },
+  "homepage": "https://github.com/UWM-CASL/canvas-api-console#readme",
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "25.6.0",
+    "@typescript-eslint/eslint-plugin": "8.58.1",
+    "@typescript-eslint/parser": "8.58.1",
+    "eslint": "10.2.0",
+    "typescript": "6.0.2",
+    "vitest": "4.1.4"
+  }
+}
