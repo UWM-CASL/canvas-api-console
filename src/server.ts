@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import { HTTP_METHODS, type TestNodeRequest } from './api-contracts.js';
+import { HTTP_METHODS, type SaveProfilesRequest, type ServerProfile, type TestNodeRequest } from './api-contracts.js';
 import { renderApp } from './app.js';
 import { testCanvasRequest } from './canvas-client.js';
 import { DEFAULT_PORT } from './config.js';
+import { loadProfiles, saveProfiles } from './profile-store.js';
 
 const browserScript = readFileSync(new URL('./browser-app.js', import.meta.url), 'utf8');
 const browserStyles = readFileSync(new URL('./browser-app.css', import.meta.url), 'utf8');
@@ -84,6 +85,30 @@ function isTestNodeRequest(value: unknown): value is TestNodeRequest {
   );
 }
 
+function isServerProfile(value: unknown): value is ServerProfile {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return (
+    typeof candidate.host === 'string' &&
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.token === 'string'
+  );
+}
+
+function isSaveProfilesRequest(value: unknown): value is SaveProfilesRequest {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return Array.isArray(candidate.profiles) && candidate.profiles.every((profile) => isServerProfile(profile));
+}
+
 async function routeRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const method = request.method ?? 'GET';
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -115,6 +140,35 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse):
       sendJson(response, result.ok ? 200 : 400, result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to test the node.';
+      sendJson(response, 400, {
+        error: message,
+        ok: false,
+        status: 400
+      });
+    }
+    return;
+  }
+
+  if (method === 'GET' && pathname === '/api/profiles') {
+    sendJson(response, 200, {
+      profiles: await loadProfiles()
+    });
+    return;
+  }
+
+  if (method === 'PUT' && pathname === '/api/profiles') {
+    try {
+      const requestBody = await readJsonBody(request);
+
+      if (!isSaveProfilesRequest(requestBody)) {
+        throw new Error('Profile requests must include a profiles array with id, name, host, and token fields.');
+      }
+
+      sendJson(response, 200, {
+        profiles: await saveProfiles(requestBody.profiles)
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to save server profiles.';
       sendJson(response, 400, {
         error: message,
         ok: false,

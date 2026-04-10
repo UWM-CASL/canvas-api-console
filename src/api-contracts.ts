@@ -8,6 +8,17 @@ export interface QueryParameter {
   value: string;
 }
 
+export interface ServerProfile {
+  host: string;
+  id: string;
+  name: string;
+  token: string;
+}
+
+export interface SaveProfilesRequest {
+  profiles: ServerProfile[];
+}
+
 export interface TestNodeRequest {
   bearerToken: string;
   endpoint: string;

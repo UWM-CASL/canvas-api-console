@@ -4,6 +4,69 @@ const PROFILE_FIELDS = ['name', 'host', 'token']
 const API_NODE_FIELDS = ['endpoint', 'method', 'profileId']
 const START_FIELD_FIELDS = ['name', 'type', 'defaultValue', 'optionsText']
 const PARAM_FIELDS = ['name', 'value']
+const PROFILE_SAVE_DELAY_MS = 300
+const ICONS = {
+  about: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M12 10v6"></path>
+      <circle cx="12" cy="7.5" r="1"></circle>
+    </svg>
+  `,
+  add: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5v14"></path>
+      <path d="M5 12h14"></path>
+    </svg>
+  `,
+  nodes: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="6" height="6"></rect>
+      <rect x="14" y="13" width="6" height="6"></rect>
+      <path d="M10 8h4"></path>
+      <path d="M14 8v8"></path>
+    </svg>
+  `,
+  open: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 8h6l2 2h8v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path>
+      <path d="M4 8V6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2"></path>
+    </svg>
+  `,
+  output: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="14"></rect>
+      <path d="M8 10h8"></path>
+      <path d="M8 14h5"></path>
+    </svg>
+  `,
+  queryBuilder: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="6" height="5"></rect>
+      <rect x="15" y="5" width="6" height="5"></rect>
+      <rect x="9" y="14" width="6" height="5"></rect>
+      <path d="M9 7.5h6"></path>
+      <path d="M12 10v4"></path>
+    </svg>
+  `,
+  save: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 4h11l3 3v13H5z"></path>
+      <path d="M8 4v6h7V4"></path>
+      <path d="M8 17h8"></path>
+    </svg>
+  `,
+  servers: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="6"></rect>
+      <rect x="4" y="14" width="16" height="6"></rect>
+      <path d="M8 7h.01"></path>
+      <path d="M8 17h.01"></path>
+      <path d="M12 7h4"></path>
+      <path d="M12 17h4"></path>
+    </svg>
+  `
+}
 
 const appRoot = document.getElementById('app')
 
@@ -13,11 +76,13 @@ if (!(appRoot instanceof HTMLElement)) {
 
 const state = createInitialState()
 let dragState = null
+let panState = null
+let profileSaveTimer = null
 let wireDraft = null
 
 function createInitialState() {
   return {
-    activeTab: 'servers',
+    activeTab: 'about',
     connections: [],
     formValues: {
       'field-1': ''
@@ -55,8 +120,7 @@ function createInitialState() {
     queryView: 'nodes',
     status: {
       tone: 'neutral',
-      value:
-        'Add a server profile, then create API nodes to test Canvas endpoints. Tokens stay in memory only and are not exported.'
+      value: ''
     }
   }
 }
@@ -177,17 +241,18 @@ function render() {
   appRoot.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand">
-          <h1>Canvas API Console</h1>
-          <p>Local-first query builder for inspectable Canvas workflows.</p>
-        </div>
         <nav class="nav-list" aria-label="Primary">
-          ${renderNavButton('servers', '🖧', 'Servers', 'Manage Canvas hosts and in-memory bearer tokens.')}
-          ${renderNavButton('query-builder', '🧩', 'Query Builder', 'Design the node graph and preview output wiring.')}
+          ${renderNavButton('about', 'about', 'About', 'Overview of the local Canvas API Console.')}
+          ${renderNavButton('servers', 'servers', 'Servers', 'Manage Canvas hosts and device-keychain bearer tokens.')}
+          ${renderNavButton('query-builder', 'queryBuilder', 'Query Builder', 'Design the node graph and preview output wiring.')}
         </nav>
       </aside>
       <main class="content">
-        ${state.activeTab === 'servers' ? renderServersView() : renderQueryBuilderView()}
+        ${state.activeTab === 'about'
+          ? renderAboutView()
+          : state.activeTab === 'servers'
+            ? renderServersView()
+            : renderQueryBuilderView()}
       </main>
     </div>
   `
@@ -195,7 +260,11 @@ function render() {
   updateWireLayer()
 }
 
-function renderNavButton(tabId, icon, label, description) {
+function renderIcon(iconName) {
+  return `<span class="icon-svg">${ICONS[iconName] ?? ''}</span>`
+}
+
+function renderNavButton(tabId, iconName, label, description) {
   const activeClass = state.activeTab === tabId ? ' is-active' : ''
 
   return `
@@ -205,17 +274,21 @@ function renderNavButton(tabId, icon, label, description) {
       data-action="switch-tab"
       data-tab="${tabId}"
       aria-pressed="${state.activeTab === tabId}"
+      aria-label="${escapeHtml(`${label}. ${description}`)}"
+      title="${escapeHtml(description)}"
     >
-      <span class="nav-icon" aria-hidden="true">${icon}</span>
-      <span>
-        <strong>${label}</strong>
-        <span class="helper-text"><br />${description}</span>
-      </span>
+      <span class="nav-icon" aria-hidden="true">${renderIcon(iconName)}</span>
+      <span class="nav-label">${label}</span>
+      <span class="sr-only">${escapeHtml(description)}</span>
     </button>
   `
 }
 
 function renderStatusBanner() {
+  if (!state.status.value) {
+    return ''
+  }
+
   const toneClass = state.status.tone === 'error'
     ? ' is-error'
     : state.status.tone === 'success'
@@ -225,13 +298,47 @@ function renderStatusBanner() {
   return `<div class="status-banner${toneClass}" role="status">${escapeHtml(state.status.value)}</div>`
 }
 
+function renderAboutView() {
+  return `
+    <section class="content-grid">
+      <header class="page-header">
+        <div>
+          <h1>Canvas API Console</h1>
+          <p>Local-first Canvas request tooling for authorized administrators.</p>
+        </div>
+      </header>
+      ${renderStatusBanner()}
+      <section class="about-panel">
+        <div class="about-copy">
+          <h2>Inspectable Canvas workflows, kept on your own device</h2>
+          <p>Use the Servers tab to save Canvas environments locally, with bearer tokens stored in the OS keychain through Node.js. Use Query Builder to shape reusable request graphs, test nodes, and inspect output without sending credentials to any third-party service.</p>
+        </div>
+        <div class="about-grid">
+          <section class="about-card">
+            <h3>Servers</h3>
+            <p>Profiles keep host metadata on disk and token secrets in the device keychain so they survive reloads without being exported.</p>
+          </section>
+          <section class="about-card">
+            <h3>Query Builder</h3>
+            <p>Arrange start, API, and output nodes on a draggable workspace, wire tested values between them, and pan the canvas as diagrams grow.</p>
+          </section>
+          <section class="about-card">
+            <h3>Output View</h3>
+            <p>Preview start-field inputs and end-node results from the same top tab strip used for node layout.</p>
+          </section>
+        </div>
+      </section>
+    </section>
+  `
+}
+
 function renderServersView() {
   const serverCards = state.profiles.length > 0
     ? `<div class="server-grid">${state.profiles.map((profile) => renderProfileCard(profile)).join('')}</div>`
     : `
       <div class="empty-state">
         <h3>No server profiles yet</h3>
-        <p>Add a Canvas host profile here. Bearer tokens stay in memory and are omitted from exported query files.</p>
+        <p>Add a Canvas host profile here. Hosts are saved locally and bearer tokens are stored in your device keychain.</p>
       </div>
     `
 
@@ -243,12 +350,12 @@ function renderServersView() {
           <p>Create explicit Canvas environments with a host and masked bearer token field.</p>
         </div>
         <div class="inline-actions">
-          <button class="primary-button" type="button" data-action="add-profile">Add profile</button>
+          <button class="primary-button" type="button" data-action="add-profile">Add server</button>
         </div>
       </header>
       ${renderStatusBanner()}
       <div class="helper-banner">
-        Keep profile names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are used only for local test calls and are never written into <code>.query.json</code> exports.
+        Keep profile names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are stored in the OS keychain for local test calls and are never written into <code>.query.json</code> exports.
       </div>
       ${serverCards}
     </section>
@@ -275,7 +382,7 @@ function renderProfileCard(profile) {
       </label>
       <label class="control-group">
         <span>Bearer token</span>
-        <input type="password" autocomplete="off" placeholder="Stored in memory for this session only" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
+        <input type="password" autocomplete="off" placeholder="Stored in your device keychain" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
       </label>
       <div class="card-note">Query Builder nodes can select this profile when testing Canvas endpoints.</div>
     </section>
@@ -292,20 +399,56 @@ function renderQueryBuilderView() {
         </div>
       </header>
       ${renderStatusBanner()}
+      <div class="view-tabs" role="tablist" aria-label="Query views">
+        ${renderViewTab('nodes', 'nodes', 'Node View', 'Arrange nodes and connections on the workspace.')}
+        ${renderViewTab('output', 'output', 'Output View', 'Inspect start-field inputs and end-node output.')}
+      </div>
       <div class="toolbar">
         <div class="toolbar-group">
-          <button class="primary-button" type="button" data-action="add-api-node">Add API node</button>
-          <button class="secondary-button" type="button" data-action="save-query">Save .query.json</button>
-          <button class="secondary-button" type="button" data-action="load-query">Load .query.json</button>
+          ${renderToolbarButton('add-api-node', 'add', 'Add API Node', 'Create a new API node in the workspace.', true)}
+          ${renderToolbarButton('save-query', 'save', 'Save', 'Save the current wireframe as a .query.json file.')}
+          ${renderToolbarButton('load-query', 'open', 'Open', 'Open a saved .query.json wireframe from disk.')}
           <input id="query-file-input" class="sr-only" type="file" accept=".query.json,application/json" />
-        </div>
-        <div class="toggle-group" aria-label="Query view toggle">
-          <button class="secondary-button${state.queryView === 'nodes' ? ' is-active' : ''}" type="button" data-action="set-query-view" data-query-view="nodes">Node view</button>
-          <button class="secondary-button${state.queryView === 'output' ? ' is-active' : ''}" type="button" data-action="set-query-view" data-query-view="output">Output view</button>
         </div>
       </div>
       ${state.queryView === 'nodes' ? renderNodeSpace() : renderOutputView()}
     </section>
+  `
+}
+
+function renderViewTab(queryView, iconName, label, description) {
+  const active = state.queryView === queryView
+
+  return `
+    <button
+      class="view-tab${active ? ' is-active' : ''}"
+      type="button"
+      role="tab"
+      data-action="set-query-view"
+      data-query-view="${queryView}"
+      aria-selected="${active}"
+      title="${escapeHtml(description)}"
+    >
+      <span class="view-tab-icon" aria-hidden="true">${renderIcon(iconName)}</span>
+      <span>${label}</span>
+      <span class="sr-only">${escapeHtml(description)}</span>
+    </button>
+  `
+}
+
+function renderToolbarButton(action, iconName, label, description, primary = false) {
+  return `
+    <button
+      class="${primary ? 'primary-button' : 'secondary-button'} toolbar-button"
+      type="button"
+      data-action="${action}"
+      aria-label="${escapeHtml(`${label}. ${description}`)}"
+      title="${escapeHtml(description)}"
+    >
+      <span class="toolbar-button-icon" aria-hidden="true">${renderIcon(iconName)}</span>
+      <span class="toolbar-button-label">${label}</span>
+      <span class="sr-only">${escapeHtml(description)}</span>
+    </button>
   `
 }
 
@@ -315,7 +458,7 @@ function renderNodeSpace() {
       <div class="section-header">
         <div>
           <h3>Node workspace</h3>
-          <p>Drag nodes to reposition them, then drag from an output handle to an input handle to create a wire.</p>
+          <p>Drag nodes to reposition them, drag blank grid space to pan, and drag from an output handle to an input handle to create a wire.</p>
         </div>
       </div>
       <div id="node-space" class="node-space">
@@ -889,6 +1032,86 @@ function resolveEndNodeValue() {
     message: '',
     value
   }
+}
+
+async function loadPersistedProfiles() {
+  try {
+    const response = await fetch('/api/profiles')
+    const payload = await response.json()
+
+    if (!response.ok || !Array.isArray(payload.profiles)) {
+      throw new Error('Unable to load saved server profiles.')
+    }
+
+    state.profiles = payload.profiles.map((profile, index) => ({
+      host: typeof profile.host === 'string' ? profile.host : '',
+      id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
+      name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`,
+      token: typeof profile.token === 'string' ? profile.token : ''
+    }))
+    state.nextIds = computeNextIds(state)
+  } catch {
+    state.status = {
+      tone: 'error',
+      value: 'Unable to load saved server profiles from local storage.'
+    }
+  }
+
+  render()
+}
+
+function buildProfileSaveRequest() {
+  return {
+    profiles: state.profiles.map((profile) => ({
+      host: profile.host,
+      id: profile.id,
+      name: profile.name,
+      token: profile.token
+    }))
+  }
+}
+
+async function persistProfiles(options = {}) {
+  const { announce = false, successMessage = 'Saved server profiles locally.' } = options
+
+  try {
+    const response = await fetch('/api/profiles', {
+      body: JSON.stringify(buildProfileSaveRequest()),
+      headers: {
+        'content-type': 'application/json'
+      },
+      method: 'PUT'
+    })
+    const payload = await response.json()
+
+    if (!response.ok || !Array.isArray(payload.profiles)) {
+      throw new Error('Unable to save server profiles.')
+    }
+
+    state.profiles = payload.profiles.map((profile, index) => ({
+      host: typeof profile.host === 'string' ? profile.host : '',
+      id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
+      name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`,
+      token: typeof profile.token === 'string' ? profile.token : ''
+    }))
+    state.nextIds = computeNextIds(state)
+
+    if (announce) {
+      setStatus(successMessage, 'success')
+      return
+    }
+
+    render()
+  } catch {
+    setStatus('Unable to save server profiles locally.', 'error')
+  }
+}
+
+function queueProfileSave() {
+  window.clearTimeout(profileSaveTimer)
+  profileSaveTimer = window.setTimeout(() => {
+    void persistProfiles()
+  }, PROFILE_SAVE_DELAY_MS)
 }
 
 function setStatus(value, tone = 'neutral') {
