@@ -79,6 +79,7 @@ async function main() {
   const hasNodeModules = existsSync(path.join(repoRoot, 'node_modules'));
   const hasGitBinary = tryRunCommand('git', ['--version'], { cwd: repoRoot });
   const updateEnabled = canCheckForUpdates({ hasGitBinary, hasGitDirectory });
+  const npmCommand = getNpmCommand(process.platform);
   const previousGitRevision = updateEnabled ? getGitRevision(repoRoot) : null;
   let gitUpdated = false;
 
@@ -96,11 +97,9 @@ async function main() {
   }
 
   if (shouldInstallDependencies({ gitUpdated, hasNodeModules, hasPackageJson })) {
-    const npmCommand = getNpmCommand(process.platform);
     runCommand(npmCommand.command, ['install'], { cwd: repoRoot, shell: npmCommand.shell });
   }
 
-  const npmCommand = getNpmCommand(process.platform);
   runCommand(npmCommand.command, ['run', 'build'], { cwd: repoRoot, shell: npmCommand.shell });
 
   const { startServer } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'src', 'server.js')).href);
