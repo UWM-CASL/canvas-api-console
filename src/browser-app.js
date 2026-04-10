@@ -1,0 +1,1722 @@
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+const FIELD_TYPES = ['text', 'number', 'checkbox', 'date', 'select']
+
+const appRoot = document.getElementById('app')
+
+if (!(appRoot instanceof HTMLElement)) {
+  throw new Error('Unable to mount the Canvas API Console UI.')
+}
+
+const state = createInitialState()
+let dragState = null
+let wireDraft = null
+
+function createInitialState() {
+  return {
+    activeTab: 'servers',
+    connections: [],
+    formValues: {
+      'field-1': ''
+    },
+    nextIds: {
+      field: 2,
+      node: 1,
+      param: 2,
+      profile: 1,
+      wire: 1
+    },
+    nodes: [
+      {
+        fields: [
+          {
+            defaultValue: '',
+            id: 'field-1',
+            name: 'courseId',
+            optionsText: '',
+            type: 'text'
+          }
+        ],
+        id: 'start',
+        position: { x: 56, y: 72 },
+        type: 'start'
+      },
+      {
+        columnsText: '',
+        id: 'end',
+        position: { x: 920, y: 120 },
+        type: 'end'
+      }
+    ],
+    profiles: [],
+    queryView: 'nodes',
+    status: {
+      tone: 'neutral',
+      value:
+        'Add a server profile, then create API nodes to test Canvas endpoints. Tokens stay in memory only and are not exported.'
+    }
+  }
+}
+
+function getStartNode() {
+  return state.nodes.find((node) => node.type === 'start')
+}
+
+function getEndNode() {
+  return state.nodes.find((node) => node.type === 'end')
+}
+
+function getNode(nodeId) {
+  return state.nodes.find((node) => node.id === nodeId)
+}
+
+function getProfile(profileId) {
+  return state.profiles.find((profile) => profile.id === profileId)
+}
+
+function createApiNode() {
+  const nodeId = `node-${state.nextIds.node++}`
+  const paramId = `param-${state.nextIds.param++}`
+
+  return {
+    endpoint: '/api/v1/courses',
+    error: '',
+    id: nodeId,
+    lastTest: null,
+    method: 'GET',
+    params: [
+      {
+        id: paramId,
+        name: 'search_term',
+        value: ''
+      }
+    ],
+    position: {
+      x: 360 + state.nodes.filter((node) => node.type === 'api').length * 48,
+      y: 84 + state.nodes.filter((node) => node.type === 'api').length * 42
+    },
+    profileId: state.profiles[0]?.id ?? '',
+    testing: false,
+    type: 'api'
+  }
+}
+
+function createProfile() {
+  const profileId = `profile-${state.nextIds.profile++}`
+
+  return {
+    host: '',
+    id: profileId,
+    name: `Server ${state.profiles.length + 1}`,
+    token: ''
+  }
+}
+
+function createStartField() {
+  const fieldId = `field-${state.nextIds.field++}`
+
+  return {
+    defaultValue: '',
+    id: fieldId,
+    name: `field_${state.nextIds.field - 1}`,
+    optionsText: '',
+    type: 'text'
+  }
+}
+
+function createQueryParameter() {
+  const paramId = `param-${state.nextIds.param++}`
+
+  return {
+    id: paramId,
+    name: '',
+    value: ''
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function syncFormValues() {
+  const startNode = getStartNode()
+
+  if (!startNode) {
+    state.formValues = {}
+    return
+  }
+
+  const nextValues = {}
+
+  for (const field of startNode.fields) {
+    if (field.type === 'checkbox') {
+      nextValues[field.id] = state.formValues[field.id] === undefined
+        ? field.defaultValue === 'true'
+        : Boolean(state.formValues[field.id])
+      continue
+    }
+
+    nextValues[field.id] = state.formValues[field.id] ?? field.defaultValue
+  }
+
+  state.formValues = nextValues
+}
+
+function render() {
+  syncFormValues()
+
+  appRoot.innerHTML = `
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <h1>Canvas API Console</h1>
+          <p>Local-first query builder for inspectable Canvas workflows.</p>
+        </div>
+        <nav class="nav-list" aria-label="Primary">
+          ${renderNavButton('servers', '🖧', 'Servers', 'Manage Canvas hosts and in-memory bearer tokens.')}
+          ${renderNavButton('query-builder', '🧩', 'Query Builder', 'Design the node graph and preview output wiring.')}
+        </nav>
+      </aside>
+      <main class="content">
+        ${state.activeTab === 'servers' ? renderServersView() : renderQueryBuilderView()}
+      </main>
+    </div>
+  `
+
+  updateWireLayer()
+}
+
+function renderNavButton(tabId, icon, label, description) {
+  const activeClass = state.activeTab === tabId ? ' is-active' : ''
+
+  return `
+    <button
+      class="nav-button${activeClass}"
+      type="button"
+      data-action="switch-tab"
+      data-tab="${tabId}"
+      aria-pressed="${state.activeTab === tabId}"
+    >
+      <span class="nav-icon" aria-hidden="true">${icon}</span>
+      <span>
+        <strong>${label}</strong>
+        <span class="helper-text"><br />${description}</span>
+      </span>
+    </button>
+  `
+}
+
+function renderStatusBanner() {
+  const toneClass = state.status.tone === 'error'
+    ? ' is-error'
+    : state.status.tone === 'success'
+      ? ' is-success'
+      : ''
+
+  return `<div class="status-banner${toneClass}" role="status">${escapeHtml(state.status.value)}</div>`
+}
+
+function renderServersView() {
+  const serverCards = state.profiles.length > 0
+    ? `<div class="server-grid">${state.profiles.map((profile) => renderProfileCard(profile)).join('')}</div>`
+    : `
+      <div class="empty-state">
+        <h3>No server profiles yet</h3>
+        <p>Add a Canvas host profile here. Bearer tokens stay in memory and are omitted from exported query files.</p>
+      </div>
+    `
+
+  return `
+    <section class="content-grid">
+      <header class="page-header">
+        <div>
+          <h2>Servers</h2>
+          <p>Create explicit Canvas environments with a host and masked bearer token field.</p>
+        </div>
+        <div class="inline-actions">
+          <button class="primary-button" type="button" data-action="add-profile">Add profile</button>
+        </div>
+      </header>
+      ${renderStatusBanner()}
+      <div class="helper-banner">
+        Keep profile names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are used only for local test calls and are never written into <code>.query.json</code> exports.
+      </div>
+      ${serverCards}
+    </section>
+  `
+}
+
+function renderProfileCard(profile) {
+  return `
+    <section class="server-card" aria-labelledby="${profile.id}-heading">
+      <div class="section-header">
+        <div>
+          <h3 id="${profile.id}-heading">${escapeHtml(profile.name || 'Untitled server')}</h3>
+          <p>Host and token settings for a Canvas environment.</p>
+        </div>
+        <button class="ghost-button" type="button" data-action="remove-profile" data-profile-id="${profile.id}">Remove</button>
+      </div>
+      <label class="control-group">
+        <span>Profile name</span>
+        <input type="text" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" data-profile-field="name" />
+      </label>
+      <label class="control-group">
+        <span>Canvas host</span>
+        <input type="url" placeholder="https://canvas.example.edu" value="${escapeHtml(profile.host)}" data-profile-id="${profile.id}" data-profile-field="host" />
+      </label>
+      <label class="control-group">
+        <span>Bearer token</span>
+        <input type="password" autocomplete="off" placeholder="Stored in memory for this session only" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
+      </label>
+      <div class="card-note">Query Builder nodes can select this profile when testing Canvas endpoints.</div>
+    </section>
+  `
+}
+
+function renderQueryBuilderView() {
+  return `
+    <section class="content-grid">
+      <header class="page-header">
+        <div>
+          <h2>Query Builder</h2>
+          <p>Wire start-field inputs into testable API nodes, then pipe a tested result into the end node output view.</p>
+        </div>
+      </header>
+      ${renderStatusBanner()}
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <button class="primary-button" type="button" data-action="add-api-node">Add API node</button>
+          <button class="secondary-button" type="button" data-action="save-query">Save .query.json</button>
+          <button class="secondary-button" type="button" data-action="load-query">Load .query.json</button>
+          <input id="query-file-input" class="sr-only" type="file" accept=".query.json,application/json" />
+        </div>
+        <div class="toggle-group" aria-label="Query view toggle">
+          <button class="secondary-button${state.queryView === 'nodes' ? ' is-active' : ''}" type="button" data-action="set-query-view" data-query-view="nodes">Node view</button>
+          <button class="secondary-button${state.queryView === 'output' ? ' is-active' : ''}" type="button" data-action="set-query-view" data-query-view="output">Output view</button>
+        </div>
+      </div>
+      ${state.queryView === 'nodes' ? renderNodeSpace() : renderOutputView()}
+    </section>
+  `
+}
+
+function renderNodeSpace() {
+  return `
+    <section class="panel">
+      <div class="section-header">
+        <div>
+          <h3>Node workspace</h3>
+          <p>Drag nodes to reposition them, then drag from an output handle to an input handle to create a wire.</p>
+        </div>
+      </div>
+      <div id="node-space" class="node-space">
+        <svg id="wire-layer" class="wire-layer" aria-hidden="true"></svg>
+        ${state.nodes.map((node) => renderNode(node)).join('')}
+      </div>
+    </section>
+  `
+}
+
+function renderNode(node) {
+  if (node.type === 'start') {
+    return renderStartNode(node)
+  }
+
+  if (node.type === 'end') {
+    return renderEndNode(node)
+  }
+
+  return renderApiNode(node)
+}
+
+function renderStartNode(node) {
+  return `
+    <section class="node" data-node-id="${node.id}" data-node-type="start" style="left: ${node.position.x}px; top: ${node.position.y}px;">
+      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
+        <div>
+          <div class="node-tag">Start</div>
+          <h3>Start node</h3>
+        </div>
+        <span class="muted">Form inputs</span>
+      </div>
+      <div class="node-body">
+        <div class="helper-text">Add the fields users see at the top of the output view.</div>
+        <div class="field-list">
+          ${node.fields.map((field) => renderStartField(field)).join('')}
+        </div>
+        <button class="secondary-button" type="button" data-action="add-start-field">Add field</button>
+      </div>
+    </section>
+  `
+}
+
+function renderStartField(field) {
+  const typeOptions = FIELD_TYPES.map((type) => `
+    <option value="${type}"${field.type === type ? ' selected' : ''}>${type}</option>
+  `).join('')
+
+  return `
+    <div class="field-row">
+      <div class="field-actions">
+        <strong>${escapeHtml(field.name || 'Untitled field')}</strong>
+        <div class="inline-actions">
+          ${renderOutputHandle('start', field.id, `Use ${field.name || 'field'} as an input source`)}
+          <button class="ghost-button" type="button" data-action="remove-start-field" data-field-id="${field.id}">Remove</button>
+        </div>
+      </div>
+      <div class="field-grid">
+        <label class="control-group">
+          <span>Name</span>
+          <input type="text" value="${escapeHtml(field.name)}" data-start-field-id="${field.id}" data-start-field-field="name" />
+        </label>
+        <label class="control-group">
+          <span>Type</span>
+          <select data-start-field-id="${field.id}" data-start-field-field="type">${typeOptions}</select>
+        </label>
+        ${renderStartFieldValueEditor(field)}
+      </div>
+      ${field.type === 'select'
+        ? `<label class="control-group"><span>Options</span><input type="text" value="${escapeHtml(field.optionsText)}" placeholder="Option A, Option B" data-start-field-id="${field.id}" data-start-field-field="optionsText" /></label>`
+        : ''}
+    </div>
+  `
+}
+
+function renderStartFieldValueEditor(field) {
+  if (field.type === 'checkbox') {
+    return `
+      <label class="control-group">
+        <span>Default</span>
+        <select data-start-field-id="${field.id}" data-start-field-field="defaultValue">
+          <option value="false"${field.defaultValue !== 'true' ? ' selected' : ''}>Unchecked</option>
+          <option value="true"${field.defaultValue === 'true' ? ' selected' : ''}>Checked</option>
+        </select>
+      </label>
+    `
+  }
+
+  return `
+    <label class="control-group">
+      <span>Default</span>
+      <input
+        type="${field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}"
+        value="${escapeHtml(field.defaultValue)}"
+        data-start-field-id="${field.id}"
+        data-start-field-field="defaultValue"
+      />
+    </label>
+  `
+}
+
+function renderApiNode(node) {
+  const profileOptions = [
+    '<option value="">Select a server profile</option>',
+    ...state.profiles.map((profile) => `
+      <option value="${profile.id}"${profile.id === node.profileId ? ' selected' : ''}>${escapeHtml(profile.name || profile.host || profile.id)}</option>
+    `)
+  ].join('')
+  const methodOptions = HTTP_METHODS.map((method) => `
+    <option value="${method}"${node.method === method ? ' selected' : ''}>${method}</option>
+  `).join('')
+  const outputDescriptors = getOutputDescriptors(node)
+
+  return `
+    <section class="node" data-node-id="${node.id}" data-node-type="api" style="left: ${node.position.x}px; top: ${node.position.y}px;">
+      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
+        <div>
+          <div class="node-tag">Query</div>
+          <h3>${escapeHtml(node.endpoint || 'API node')}</h3>
+        </div>
+        <div class="node-actions">
+          <button class="secondary-button" type="button" data-action="test-node" data-node-id="${node.id}" ${node.testing ? 'disabled' : ''}>${node.testing ? 'Testing…' : 'Test node'}</button>
+          <button class="ghost-button" type="button" data-action="remove-node" data-node-id="${node.id}">Remove</button>
+        </div>
+      </div>
+      <div class="node-body">
+        <div class="node-grid">
+          <label class="control-group">
+            <span>Server profile</span>
+            <select data-node-id="${node.id}" data-node-field="profileId">${profileOptions}</select>
+          </label>
+          <label class="control-group">
+            <span>Method</span>
+            <select data-node-id="${node.id}" data-node-field="method">${methodOptions}</select>
+          </label>
+        </div>
+        <label class="control-group">
+          <span>API endpoint</span>
+          <input type="text" value="${escapeHtml(node.endpoint)}" placeholder="/api/v1/courses" data-node-id="${node.id}" data-node-field="endpoint" />
+        </label>
+        <div class="control-group">
+          <span>Query parameters</span>
+          <div class="param-list">${node.params.map((param) => renderParamRow(node, param)).join('')}</div>
+          <button class="secondary-button" type="button" data-action="add-param" data-node-id="${node.id}">Add query parameter</button>
+        </div>
+        <div class="control-group">
+          <span>Output handles</span>
+          ${outputDescriptors.length > 0
+            ? `<div class="output-handle-list">${outputDescriptors.map((descriptor) => renderOutputHandleRow(node.id, descriptor)).join('')}</div>`
+            : '<div class="helper-text">Run a test call to turn the returned properties into output wires.</div>'}
+        </div>
+        ${renderNodeTestState(node)}
+      </div>
+    </section>
+  `
+}
+
+function renderParamRow(node, param) {
+  const connection = getConnectionForTarget(node.id, `param:${param.id}`)
+  const sourceLabel = connection ? getSourceLabel(connection.source) : ''
+
+  return `
+    <div class="param-row">
+      <div>
+        ${renderInputHandle(node.id, `param:${param.id}`, `Wire a value into ${param.name || 'this query parameter'}`)}
+      </div>
+      <label class="control-group">
+        <span class="sr-only">Parameter name</span>
+        <input type="text" placeholder="parameter_name" value="${escapeHtml(param.name)}" data-node-id="${node.id}" data-param-id="${param.id}" data-param-field="name" />
+      </label>
+      <label class="control-group">
+        <span class="sr-only">Parameter value</span>
+        <input type="text" placeholder="Manual value" value="${escapeHtml(param.value)}" data-node-id="${node.id}" data-param-id="${param.id}" data-param-field="value" ${connection ? 'disabled' : ''} />
+        ${connection
+          ? `<span class="connection-label">Connected from ${escapeHtml(sourceLabel)}</span>`
+          : '<span class="connection-label">Manual value</span>'}
+      </label>
+      <div class="inline-actions">
+        ${connection
+          ? `<button class="ghost-button" type="button" data-action="remove-connection" data-target-node-id="${node.id}" data-target-handle-key="param:${param.id}">Disconnect</button>`
+          : ''}
+        <button class="ghost-button" type="button" data-action="remove-param" data-node-id="${node.id}" data-param-id="${param.id}">Remove</button>
+      </div>
+    </div>
+  `
+}
+
+function renderOutputHandleRow(nodeId, descriptor) {
+  return `
+    <div class="output-handle-row">
+      <div class="field-actions">
+        <div>
+          <strong>${escapeHtml(descriptor.label)}</strong>
+          <div class="helper-text">${escapeHtml(descriptor.description)}</div>
+        </div>
+        ${renderOutputHandle(nodeId, descriptor.key, `Connect ${descriptor.label} to another node`)}
+      </div>
+    </div>
+  `
+}
+
+function renderNodeTestState(node) {
+  if (!node.lastTest) {
+    return '<div class="helper-text">Node tests return data that can feed the end node or downstream query parameters.</div>'
+  }
+
+  if (!node.lastTest.ok) {
+    return `
+      <div class="status-banner is-error">
+        <strong>Last test failed</strong>
+        <div class="test-result-meta">${escapeHtml(node.lastTest.error)}</div>
+      </div>
+    `
+  }
+
+  return `
+    <div class="status-banner is-success">
+      <strong>Last test succeeded</strong>
+      <div class="test-result-meta">HTTP ${node.lastTest.status}</div>
+      <pre>${escapeHtml(JSON.stringify(node.lastTest.data, null, 2))}</pre>
+    </div>
+  `
+}
+
+function renderEndNode(node) {
+  const connection = getConnectionForTarget(node.id, 'input')
+
+  return `
+    <section class="node" data-node-id="${node.id}" data-node-type="end" style="left: ${node.position.x}px; top: ${node.position.y}px;">
+      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
+        <div>
+          <div class="node-tag">End</div>
+          <h3>Output node</h3>
+        </div>
+        ${renderInputHandle(node.id, 'input', 'Connect a tested output into the end node')}
+      </div>
+      <div class="node-body">
+        <div class="helper-text">The output view shows the fields from the start node above whichever tested value is piped into this node.</div>
+        <label class="control-group">
+          <span>Visible columns</span>
+          <input type="text" placeholder="id, name, sis_course_id" value="${escapeHtml(node.columnsText)}" data-end-field="columnsText" />
+        </label>
+        ${connection
+          ? `<div class="connection-label">Connected from ${escapeHtml(getSourceLabel(connection.source))}</div>`
+          : '<div class="connection-label">No source is connected yet.</div>'}
+        ${connection
+          ? `<button class="ghost-button" type="button" data-action="remove-connection" data-target-node-id="${node.id}" data-target-handle-key="input">Disconnect input</button>`
+          : ''}
+      </div>
+    </section>
+  `
+}
+
+function renderOutputView() {
+  const startNode = getStartNode()
+  const endNode = getEndNode()
+  const endValue = resolveEndNodeValue()
+
+  return `
+    <section class="output-layout">
+      <section class="output-card">
+        <div class="output-header">
+          <div>
+            <h3>Start fields</h3>
+            <p>These inputs use the default values configured on the start node and can be adjusted before you test downstream nodes.</p>
+          </div>
+          <button class="ghost-button" type="button" data-action="reset-form-values">Reset to defaults</button>
+        </div>
+        <div class="output-fields">
+          ${startNode.fields.length > 0
+            ? startNode.fields.map((field) => renderOutputField(field)).join('')
+            : '<div class="empty-state"><h3>No start fields</h3><p>Add form fields on the start node to collect reusable input values.</p></div>'}
+        </div>
+      </section>
+      <section class="output-card">
+        <div class="output-header">
+          <div>
+            <h3>End node output</h3>
+            <p>Data from the wire connected into the end node appears below.</p>
+          </div>
+          <span class="badge">${escapeHtml(endNode.columnsText || 'Auto columns')}</span>
+        </div>
+        ${endValue.available
+          ? renderResolvedOutput(endValue.value, endNode.columnsText)
+          : `<div class="empty-state"><h3>No end-node data yet</h3><p>${escapeHtml(endValue.message)}</p></div>`}
+      </section>
+    </section>
+  `
+}
+
+function renderOutputField(field) {
+  const value = state.formValues[field.id]
+
+  if (field.type === 'checkbox') {
+    return `
+      <section class="field-card">
+        <label>
+          <span>${escapeHtml(field.name || 'Untitled field')}</span>
+          <input type="checkbox" ${value ? 'checked' : ''} data-form-field-id="${field.id}" />
+        </label>
+      </section>
+    `
+  }
+
+  if (field.type === 'select') {
+    const options = getFieldOptions(field)
+
+    return `
+      <section class="field-card">
+        <label>
+          <span>${escapeHtml(field.name || 'Untitled field')}</span>
+          <select data-form-field-id="${field.id}">
+            ${options.map((option) => `<option value="${escapeHtml(option)}"${String(value) === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
+          </select>
+        </label>
+      </section>
+    `
+  }
+
+  return `
+    <section class="field-card">
+      <label>
+        <span>${escapeHtml(field.name || 'Untitled field')}</span>
+        <input type="${field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}" value="${escapeHtml(value)}" data-form-field-id="${field.id}" />
+      </label>
+    </section>
+  `
+}
+
+function renderResolvedOutput(value, columnsText) {
+  if (Array.isArray(value)) {
+    return renderArrayOutput(value, columnsText)
+  }
+
+  if (isPlainObject(value)) {
+    return renderRecordOutput(value, columnsText)
+  }
+
+  return `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`
+}
+
+function renderArrayOutput(value, columnsText) {
+  if (value.length === 0) {
+    return '<div class="empty-state"><h3>Empty array</h3><p>The connected output returned an empty list.</p></div>'
+  }
+
+  const selectedColumns = parseColumns(columnsText)
+
+  if (!isPlainObject(value[0])) {
+    return `
+      <div class="table-container">
+        <table>
+          <thead><tr><th>value</th></tr></thead>
+          <tbody>${value.map((item) => `<tr><td><pre>${escapeHtml(JSON.stringify(item, null, 2))}</pre></td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    `
+  }
+
+  const allColumns = Array.from(new Set(value.flatMap((item) => Object.keys(item))))
+  const columns = selectedColumns.length > 0 ? selectedColumns : allColumns
+
+  return `
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${value.map((item) => `
+            <tr>
+              ${columns.map((column) => `<td>${formatCellValue(item[column])}</td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `
+}
+
+function renderRecordOutput(value, columnsText) {
+  const selectedColumns = parseColumns(columnsText)
+  const columns = selectedColumns.length > 0 ? selectedColumns : Object.keys(value)
+
+  return `
+    <div class="record-grid">
+      ${columns.map((column) => `
+        <div class="record-row">
+          <strong>${escapeHtml(column)}</strong>
+          ${formatCellValue(value[column])}
+        </div>
+      `).join('')}
+    </div>
+  `
+}
+
+function formatCellValue(value) {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return escapeHtml(value)
+  }
+
+  if (value === null || value === undefined) {
+    return '<span class="muted">—</span>'
+  }
+
+  return `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`
+}
+
+function renderOutputHandle(nodeId, handleKey, label) {
+  return `
+    <button
+      class="handle handle-output"
+      type="button"
+      data-direction="output"
+      data-node-id="${nodeId}"
+      data-handle-key="${handleKey}"
+      aria-label="${escapeHtml(label)}"
+      title="${escapeHtml(label)}"
+    >●</button>
+  `
+}
+
+function renderInputHandle(nodeId, handleKey, label) {
+  return `
+    <button
+      class="handle handle-input"
+      type="button"
+      data-direction="input"
+      data-node-id="${nodeId}"
+      data-handle-key="${handleKey}"
+      aria-label="${escapeHtml(label)}"
+      title="${escapeHtml(label)}"
+    >●</button>
+  `
+}
+
+function getFieldOptions(field) {
+  return field.optionsText
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function parseColumns(columnsText) {
+  return columnsText
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function getOutputDescriptors(node) {
+  if (!node.lastTest || !node.lastTest.ok) {
+    return []
+  }
+
+  return describeOutputs(node.lastTest.data)
+}
+
+function describeOutputs(data) {
+  const descriptors = [
+    {
+      description: 'Wire the full response into another input or into the end node.',
+      key: '$',
+      label: Array.isArray(data) ? 'Result array' : 'Result'
+    }
+  ]
+
+  if (Array.isArray(data) && data.length > 0 && isPlainObject(data[0])) {
+    for (const key of Object.keys(data[0])) {
+      descriptors.push({
+        description: 'Uses the first row value when this array output is connected onward.',
+        key,
+        label: `${key} (first row)`
+      })
+    }
+  } else if (isPlainObject(data)) {
+    for (const key of Object.keys(data)) {
+      descriptors.push({
+        description: 'Top-level response property.',
+        key,
+        label: key
+      })
+    }
+  }
+
+  return descriptors
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getConnectionForTarget(nodeId, handleKey) {
+  return state.connections.find((connection) => connection.target.nodeId === nodeId && connection.target.handleKey === handleKey)
+}
+
+function getSourceLabel(source) {
+  const sourceNode = getNode(source.nodeId)
+
+  if (!sourceNode) {
+    return 'unknown source'
+  }
+
+  if (sourceNode.type === 'start') {
+    const field = sourceNode.fields.find((item) => item.id === source.handleKey)
+    return field?.name || 'start field'
+  }
+
+  if (sourceNode.type === 'api') {
+    const descriptor = getOutputDescriptors(sourceNode).find((item) => item.key === source.handleKey)
+    return descriptor?.label || `${sourceNode.endpoint || sourceNode.id} output`
+  }
+
+  return 'end node'
+}
+
+function resolveSourceValue(source) {
+  const sourceNode = getNode(source.nodeId)
+
+  if (!sourceNode) {
+    return undefined
+  }
+
+  if (sourceNode.type === 'start') {
+    return state.formValues[source.handleKey]
+  }
+
+  if (sourceNode.type !== 'api' || !sourceNode.lastTest || !sourceNode.lastTest.ok) {
+    return undefined
+  }
+
+  if (source.handleKey === '$') {
+    return sourceNode.lastTest.data
+  }
+
+  if (Array.isArray(sourceNode.lastTest.data)) {
+    const firstRow = sourceNode.lastTest.data[0]
+    return isPlainObject(firstRow) ? firstRow[source.handleKey] : undefined
+  }
+
+  if (isPlainObject(sourceNode.lastTest.data)) {
+    return sourceNode.lastTest.data[source.handleKey]
+  }
+
+  return undefined
+}
+
+function resolveEndNodeValue() {
+  const connection = getConnectionForTarget('end', 'input')
+
+  if (!connection) {
+    return {
+      available: false,
+      message: 'Connect a tested API-node result into the end node from the node view.',
+      value: null
+    }
+  }
+
+  const value = resolveSourceValue(connection.source)
+
+  if (value === undefined) {
+    return {
+      available: false,
+      message: 'The connected source has not produced a tested value yet.',
+      value: null
+    }
+  }
+
+  return {
+    available: true,
+    message: '',
+    value
+  }
+}
+
+function setStatus(value, tone = 'neutral') {
+  state.status = { tone, value }
+  render()
+}
+
+function updateNodeElementPosition(nodeId) {
+  const node = getNode(nodeId)
+  const nodeElement = appRoot.querySelector(`[data-node-id="${nodeId}"]`)
+
+  if (!node || !(nodeElement instanceof HTMLElement)) {
+    return
+  }
+
+  nodeElement.style.left = `${node.position.x}px`
+  nodeElement.style.top = `${node.position.y}px`
+  updateWireLayer()
+}
+
+function getHandleCenter(nodeId, handleKey, direction) {
+  const nodeSpace = document.getElementById('node-space')
+  const handleElement = appRoot.querySelector(
+    `[data-node-id="${nodeId}"][data-handle-key="${handleKey}"][data-direction="${direction}"]`
+  )
+
+  if (!(nodeSpace instanceof HTMLElement) || !(handleElement instanceof HTMLElement)) {
+    return null
+  }
+
+  const spaceRect = nodeSpace.getBoundingClientRect()
+  const handleRect = handleElement.getBoundingClientRect()
+
+  return {
+    x: handleRect.left - spaceRect.left + handleRect.width / 2 + nodeSpace.scrollLeft,
+    y: handleRect.top - spaceRect.top + handleRect.height / 2 + nodeSpace.scrollTop
+  }
+}
+
+function buildWirePath(startPoint, endPoint) {
+  const curveDistance = Math.max(80, Math.abs(endPoint.x - startPoint.x) * 0.45)
+
+  return `M ${startPoint.x} ${startPoint.y} C ${startPoint.x + curveDistance} ${startPoint.y}, ${endPoint.x - curveDistance} ${endPoint.y}, ${endPoint.x} ${endPoint.y}`
+}
+
+function updateWireLayer() {
+  const wireLayer = document.getElementById('wire-layer')
+  const nodeSpace = document.getElementById('node-space')
+
+  if (!(wireLayer instanceof SVGElement) || !(nodeSpace instanceof HTMLElement)) {
+    return
+  }
+
+  const width = Math.max(nodeSpace.scrollWidth, nodeSpace.clientWidth)
+  const height = Math.max(nodeSpace.scrollHeight, nodeSpace.clientHeight)
+  wireLayer.setAttribute('viewBox', `0 0 ${width} ${height}`)
+
+  const paths = []
+
+  for (const connection of state.connections) {
+    const startPoint = getHandleCenter(connection.source.nodeId, connection.source.handleKey, 'output')
+    const endPoint = getHandleCenter(connection.target.nodeId, connection.target.handleKey, 'input')
+
+    if (!startPoint || !endPoint) {
+      continue
+    }
+
+    paths.push(`<path class="wire-path" d="${buildWirePath(startPoint, endPoint)}"></path>`)
+  }
+
+  if (wireDraft) {
+    paths.push(`<path class="wire-path is-draft" d="${buildWirePath(wireDraft.startPoint, wireDraft.currentPoint)}"></path>`)
+  }
+
+  wireLayer.innerHTML = paths.join('')
+}
+
+function removeConnectionsForNode(nodeId) {
+  state.connections = state.connections.filter((connection) => connection.source.nodeId !== nodeId && connection.target.nodeId !== nodeId)
+}
+
+function removeConnection(targetNodeId, targetHandleKey) {
+  state.connections = state.connections.filter(
+    (connection) => !(connection.target.nodeId === targetNodeId && connection.target.handleKey === targetHandleKey)
+  )
+}
+
+function resetNodeTestsReferencingSource(nodeId) {
+  for (const node of state.nodes) {
+    if (node.type === 'api' && node.id === nodeId) {
+      continue
+    }
+
+    if (node.type === 'api') {
+      const hasDependency = state.connections.some(
+        (connection) => connection.target.nodeId === node.id && connection.source.nodeId === nodeId
+      )
+
+      if (hasDependency) {
+        node.lastTest = null
+      }
+    }
+  }
+}
+
+function buildQueryExport() {
+  return {
+    columnsNote: 'Bearer tokens and test responses are intentionally excluded.',
+    connections: state.connections,
+    nodes: state.nodes.map((node) => {
+      if (node.type === 'api') {
+        return {
+          endpoint: node.endpoint,
+          id: node.id,
+          method: node.method,
+          params: node.params,
+          position: node.position,
+          profileId: node.profileId,
+          type: node.type
+        }
+      }
+
+      return node
+    }),
+    profiles: state.profiles.map((profile) => ({
+      host: profile.host,
+      id: profile.id,
+      name: profile.name,
+      token: ''
+    })),
+    version: 1
+  }
+}
+
+function saveQueryToFile() {
+  const blob = new Blob([JSON.stringify(buildQueryExport(), null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'canvas-query.query.json'
+  link.click()
+  URL.revokeObjectURL(url)
+  setStatus('Saved the current wireframe as a .query.json file.', 'success')
+}
+
+function loadQueryFromFile(file) {
+  const reader = new FileReader()
+
+  reader.addEventListener('load', () => {
+    try {
+      const parsed = JSON.parse(String(reader.result ?? '{}'))
+      hydrateState(parsed)
+      setStatus('Loaded a .query.json file. Bearer tokens must be re-entered locally.', 'success')
+    } catch {
+      setStatus('The selected file is not a valid .query.json export.', 'error')
+    }
+  })
+
+  reader.readAsText(file)
+}
+
+function hydrateState(parsed) {
+  const nextState = createInitialState()
+
+  if (Array.isArray(parsed.profiles)) {
+    nextState.profiles = parsed.profiles.map((profile, index) => ({
+      host: typeof profile.host === 'string' ? profile.host : '',
+      id: typeof profile.id === 'string' ? profile.id : `profile-${index + 1}`,
+      name: typeof profile.name === 'string' ? profile.name : `Server ${index + 1}`,
+      token: ''
+    }))
+  }
+
+  if (Array.isArray(parsed.nodes)) {
+    const loadedNodes = parsed.nodes.filter((node) => node && typeof node === 'object' && typeof node.type === 'string')
+    const hasStart = loadedNodes.some((node) => node.type === 'start')
+    const hasEnd = loadedNodes.some((node) => node.type === 'end')
+
+    if (hasStart && hasEnd) {
+      nextState.nodes = loadedNodes.map((node, index) => {
+        if (node.type === 'start') {
+          return {
+            fields: Array.isArray(node.fields) && node.fields.length > 0
+              ? node.fields.map((field, fieldIndex) => ({
+                  defaultValue: typeof field.defaultValue === 'string' ? field.defaultValue : '',
+                  id: typeof field.id === 'string' ? field.id : `field-${fieldIndex + 1}`,
+                  name: typeof field.name === 'string' ? field.name : `field_${fieldIndex + 1}`,
+                  optionsText: typeof field.optionsText === 'string' ? field.optionsText : '',
+                  type: FIELD_TYPES.includes(field.type) ? field.type : 'text'
+                }))
+              : [createStartField()],
+            id: typeof node.id === 'string' ? node.id : 'start',
+            position: normalizePosition(node.position, index),
+            type: 'start'
+          }
+        }
+
+        if (node.type === 'end') {
+          return {
+            columnsText: typeof node.columnsText === 'string' ? node.columnsText : '',
+            id: typeof node.id === 'string' ? node.id : 'end',
+            position: normalizePosition(node.position, index),
+            type: 'end'
+          }
+        }
+
+        return {
+          endpoint: typeof node.endpoint === 'string' ? node.endpoint : '/api/v1/courses',
+          error: '',
+          id: typeof node.id === 'string' ? node.id : `node-${index + 1}`,
+          lastTest: null,
+          method: HTTP_METHODS.includes(node.method) ? node.method : 'GET',
+          params: Array.isArray(node.params) && node.params.length > 0
+            ? node.params.map((param, paramIndex) => ({
+                id: typeof param.id === 'string' ? param.id : `param-${paramIndex + 1}`,
+                name: typeof param.name === 'string' ? param.name : '',
+                value: typeof param.value === 'string' ? param.value : ''
+              }))
+            : [createQueryParameter()],
+          position: normalizePosition(node.position, index),
+          profileId: typeof node.profileId === 'string' ? node.profileId : '',
+          testing: false,
+          type: 'api'
+        }
+      })
+    }
+  }
+
+  if (Array.isArray(parsed.connections)) {
+    nextState.connections = parsed.connections.filter(
+      (connection) => connection?.source?.nodeId && connection?.source?.handleKey && connection?.target?.nodeId && connection?.target?.handleKey
+    ).map((connection, index) => ({
+      id: typeof connection.id === 'string' ? connection.id : `wire-${index + 1}`,
+      source: {
+        handleKey: String(connection.source.handleKey),
+        nodeId: String(connection.source.nodeId)
+      },
+      target: {
+        handleKey: String(connection.target.handleKey),
+        nodeId: String(connection.target.nodeId)
+      }
+    }))
+  }
+
+  nextState.nextIds = computeNextIds(nextState)
+  state.activeTab = 'query-builder'
+  state.connections = nextState.connections
+  state.formValues = {}
+  state.nextIds = nextState.nextIds
+  state.nodes = nextState.nodes
+  state.profiles = nextState.profiles
+  state.queryView = 'nodes'
+}
+
+function normalizePosition(position, index) {
+  return {
+    x: typeof position?.x === 'number' ? position.x : 96 + index * 32,
+    y: typeof position?.y === 'number' ? position.y : 96 + index * 32
+  }
+}
+
+function computeNextIds(nextState) {
+  const ids = {
+    field: 1,
+    node: 1,
+    param: 1,
+    profile: 1,
+    wire: 1
+  }
+
+  for (const profile of nextState.profiles) {
+    ids.profile = Math.max(ids.profile, numericSuffix(profile.id) + 1)
+  }
+
+  for (const node of nextState.nodes) {
+    ids.node = Math.max(ids.node, numericSuffix(node.id) + 1)
+
+    if (node.type === 'start') {
+      for (const field of node.fields) {
+        ids.field = Math.max(ids.field, numericSuffix(field.id) + 1)
+      }
+    }
+
+    if (node.type === 'api') {
+      for (const param of node.params) {
+        ids.param = Math.max(ids.param, numericSuffix(param.id) + 1)
+      }
+    }
+  }
+
+  for (const connection of nextState.connections) {
+    ids.wire = Math.max(ids.wire, numericSuffix(connection.id) + 1)
+  }
+
+  return ids
+}
+
+function numericSuffix(value) {
+  const match = /-(\d+)$/.exec(value)
+  return match ? Number(match[1]) : 0
+}
+
+async function testNode(nodeId) {
+  const node = getNode(nodeId)
+
+  if (!node || node.type !== 'api') {
+    return
+  }
+
+  const profile = getProfile(node.profileId)
+
+  if (!profile) {
+    setStatus('Select a server profile before testing a node.', 'error')
+    return
+  }
+
+  node.testing = true
+  render()
+
+  try {
+    const queryParameters = node.params
+      .map((param) => ({
+        id: param.id,
+        name: param.name.trim(),
+        value: stringifyParameterValue(resolveParameterValue(node.id, param))
+      }))
+      .filter((param) => param.name)
+    const response = await fetch('/api/test-node', {
+      body: JSON.stringify({
+        bearerToken: profile.token,
+        endpoint: node.endpoint,
+        method: node.method,
+        profileHost: profile.host,
+        queryParameters
+      }),
+      headers: {
+        'content-type': 'application/json'
+      },
+      method: 'POST'
+    })
+    const payload = await response.json()
+
+    if (!payload.ok) {
+      node.lastTest = {
+        error: String(payload.error || 'The request failed.'),
+        ok: false,
+        status: Number(payload.status || 0)
+      }
+      setStatus(`Test failed for ${node.endpoint || node.id}.`, 'error')
+      return
+    }
+
+    node.lastTest = {
+      data: payload.data,
+      ok: true,
+      status: Number(payload.status || response.status)
+    }
+    setStatus(`Test succeeded for ${node.endpoint || node.id}.`, 'success')
+  } catch {
+    node.lastTest = {
+      error: 'The local app could not reach the test endpoint.',
+      ok: false,
+      status: 0
+    }
+    setStatus(`Test failed for ${node.endpoint || node.id}.`, 'error')
+  } finally {
+    node.testing = false
+    render()
+  }
+}
+
+function resolveParameterValue(nodeId, param) {
+  const connection = getConnectionForTarget(nodeId, `param:${param.id}`)
+
+  if (!connection) {
+    return param.value
+  }
+
+  return resolveSourceValue(connection.source)
+}
+
+function stringifyParameterValue(value) {
+  if (value === null || value === undefined) {
+    return ''
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+
+  return JSON.stringify(value)
+}
+
+function mutateControl(target) {
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  const profileId = target.dataset.profileId
+  const profileField = target.dataset.profileField
+
+  if (profileId && profileField) {
+    const profile = getProfile(profileId)
+
+    if (profile) {
+      profile[profileField] = target.value
+      render()
+    }
+
+    return
+  }
+
+  const nodeId = target.dataset.nodeId
+  const nodeField = target.dataset.nodeField
+
+  if (nodeId && nodeField) {
+    const node = getNode(nodeId)
+
+    if (node && node.type === 'api') {
+      node[nodeField] = target.value
+      if (nodeField === 'profileId') {
+        node.lastTest = null
+      }
+      render()
+    }
+
+    return
+  }
+
+  const startFieldId = target.dataset.startFieldId
+  const startFieldField = target.dataset.startFieldField
+
+  if (startFieldId && startFieldField) {
+    const startNode = getStartNode()
+    const field = startNode?.fields.find((item) => item.id === startFieldId)
+
+    if (field && startNode) {
+      field[startFieldField] = target.value
+
+      if (startFieldField === 'type') {
+        if (field.type === 'checkbox') {
+          field.defaultValue = 'false'
+          state.formValues[field.id] = false
+        } else if (field.type === 'select') {
+          field.optionsText = field.optionsText || 'Option A, Option B'
+          field.defaultValue = getFieldOptions(field)[0] ?? ''
+          state.formValues[field.id] = field.defaultValue
+        } else {
+          state.formValues[field.id] = field.defaultValue
+        }
+      }
+
+      if (startFieldField === 'defaultValue') {
+        state.formValues[field.id] = field.type === 'checkbox' ? field.defaultValue === 'true' : field.defaultValue
+      }
+
+      if (startFieldField === 'optionsText' && field.type === 'select') {
+        const options = getFieldOptions(field)
+        const nextValue = options.includes(String(state.formValues[field.id]))
+          ? String(state.formValues[field.id])
+          : options[0] ?? ''
+        field.defaultValue = nextValue
+        state.formValues[field.id] = nextValue
+      }
+
+      render()
+    }
+
+    return
+  }
+
+  const paramId = target.dataset.paramId
+  const paramField = target.dataset.paramField
+
+  if (nodeId && paramId && paramField) {
+    const node = getNode(nodeId)
+
+    if (node && node.type === 'api') {
+      const param = node.params.find((item) => item.id === paramId)
+
+      if (param) {
+        param[paramField] = target.value
+        render()
+      }
+    }
+
+    return
+  }
+
+  if (target.dataset.endField === 'columnsText') {
+    const endNode = getEndNode()
+
+    if (endNode) {
+      endNode.columnsText = target.value
+      render()
+    }
+
+    return
+  }
+
+  const formFieldId = target.dataset.formFieldId
+
+  if (formFieldId) {
+    const startNode = getStartNode()
+    const field = startNode?.fields.find((item) => item.id === formFieldId)
+
+    if (!field) {
+      return
+    }
+
+    if (field.type === 'checkbox' && target instanceof HTMLInputElement) {
+      state.formValues[formFieldId] = target.checked
+    } else {
+      state.formValues[formFieldId] = target.value
+    }
+
+    return
+  }
+}
+
+function handleAction(target) {
+  const actionTarget = target.closest('[data-action]')
+
+  if (!(actionTarget instanceof HTMLElement)) {
+    return false
+  }
+
+  const action = actionTarget.dataset.action
+
+  if (!action) {
+    return false
+  }
+
+  if (action === 'switch-tab') {
+    state.activeTab = actionTarget.dataset.tab
+    render()
+    return true
+  }
+
+  if (action === 'add-profile') {
+    state.profiles.push(createProfile())
+    if (!state.nodes.some((node) => node.type === 'api')) {
+      state.activeTab = 'servers'
+    }
+    setStatus('Added a server profile. Tokens stay in memory only.', 'success')
+    return true
+  }
+
+  if (action === 'remove-profile') {
+    const profileId = actionTarget.dataset.profileId
+    state.profiles = state.profiles.filter((profile) => profile.id !== profileId)
+
+    for (const node of state.nodes) {
+      if (node.type === 'api' && node.profileId === profileId) {
+        node.profileId = ''
+        node.lastTest = null
+      }
+    }
+
+    setStatus('Removed the selected server profile.', 'success')
+    return true
+  }
+
+  if (action === 'set-query-view') {
+    state.queryView = actionTarget.dataset.queryView
+    render()
+    return true
+  }
+
+  if (action === 'add-api-node') {
+    state.activeTab = 'query-builder'
+    state.queryView = 'nodes'
+    state.nodes.push(createApiNode())
+    setStatus('Added a query-builder API node.', 'success')
+    return true
+  }
+
+  if (action === 'remove-node') {
+    const nodeId = actionTarget.dataset.nodeId
+    state.nodes = state.nodes.filter((node) => node.id !== nodeId)
+    removeConnectionsForNode(nodeId)
+    setStatus('Removed the selected API node.', 'success')
+    return true
+  }
+
+  if (action === 'add-start-field') {
+    const startNode = getStartNode()
+
+    if (startNode) {
+      const field = createStartField()
+      startNode.fields.push(field)
+      state.formValues[field.id] = field.defaultValue
+      setStatus('Added a start-node field.', 'success')
+    }
+
+    return true
+  }
+
+  if (action === 'remove-start-field') {
+    const fieldId = actionTarget.dataset.fieldId
+    const startNode = getStartNode()
+
+    if (startNode && startNode.fields.length > 1) {
+      startNode.fields = startNode.fields.filter((field) => field.id !== fieldId)
+      delete state.formValues[fieldId]
+      state.connections = state.connections.filter(
+        (connection) => !(connection.source.nodeId === 'start' && connection.source.handleKey === fieldId)
+      )
+      setStatus('Removed the selected start-node field.', 'success')
+    } else {
+      setStatus('Keep at least one field on the start node.', 'error')
+    }
+
+    return true
+  }
+
+  if (action === 'add-param') {
+    const node = getNode(actionTarget.dataset.nodeId)
+
+    if (node && node.type === 'api') {
+      node.params.push(createQueryParameter())
+      setStatus('Added a query parameter row.', 'success')
+    }
+
+    return true
+  }
+
+  if (action === 'remove-param') {
+    const node = getNode(actionTarget.dataset.nodeId)
+    const paramId = actionTarget.dataset.paramId
+
+    if (node && node.type === 'api' && node.params.length > 1) {
+      node.params = node.params.filter((param) => param.id !== paramId)
+      removeConnection(node.id, `param:${paramId}`)
+      setStatus('Removed the selected query parameter.', 'success')
+    } else {
+      setStatus('Keep at least one query parameter row on the node.', 'error')
+    }
+
+    return true
+  }
+
+  if (action === 'remove-connection') {
+    removeConnection(actionTarget.dataset.targetNodeId, actionTarget.dataset.targetHandleKey)
+    setStatus('Removed the selected wire.', 'success')
+    render()
+    return true
+  }
+
+  if (action === 'test-node') {
+    void testNode(actionTarget.dataset.nodeId)
+    return true
+  }
+
+  if (action === 'save-query') {
+    saveQueryToFile()
+    return true
+  }
+
+  if (action === 'load-query') {
+    const fileInput = document.getElementById('query-file-input')
+
+    if (fileInput instanceof HTMLInputElement) {
+      fileInput.click()
+    }
+
+    return true
+  }
+
+  if (action === 'reset-form-values') {
+    const startNode = getStartNode()
+
+    if (startNode) {
+      for (const field of startNode.fields) {
+        state.formValues[field.id] = field.type === 'checkbox' ? field.defaultValue === 'true' : field.defaultValue
+      }
+      setStatus('Reset output-view field values to the configured defaults.', 'success')
+    }
+
+    return true
+  }
+
+  return false
+}
+
+appRoot.addEventListener('click', (event) => {
+  const target = event.target
+
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  if (handleAction(target)) {
+    return
+  }
+})
+
+appRoot.addEventListener('input', (event) => {
+  mutateControl(event.target)
+})
+
+appRoot.addEventListener('change', (event) => {
+  const target = event.target
+
+  if (target instanceof HTMLInputElement && target.id === 'query-file-input' && target.files?.[0]) {
+    loadQueryFromFile(target.files[0])
+    target.value = ''
+    return
+  }
+
+  mutateControl(target)
+})
+
+appRoot.addEventListener('pointerdown', (event) => {
+  const target = event.target
+
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  const outputHandle = target.closest('[data-direction="output"]')
+
+  if (outputHandle instanceof HTMLElement) {
+    const startPoint = getHandleCenter(outputHandle.dataset.nodeId, outputHandle.dataset.handleKey, 'output')
+
+    if (startPoint) {
+      wireDraft = {
+        currentPoint: startPoint,
+        source: {
+          handleKey: outputHandle.dataset.handleKey,
+          nodeId: outputHandle.dataset.nodeId
+        },
+        startPoint
+      }
+      updateWireLayer()
+      event.preventDefault()
+      return
+    }
+  }
+
+  const dragHandle = target.closest('[data-drag-handle="true"]')
+  const nodeSpace = document.getElementById('node-space')
+
+  if (!(dragHandle instanceof HTMLElement) || !(nodeSpace instanceof HTMLElement)) {
+    return
+  }
+
+  const nodeId = dragHandle.dataset.nodeId
+  const node = getNode(nodeId)
+
+  if (!node) {
+    return
+  }
+
+  const nodeElement = dragHandle.closest('.node')
+
+  if (!(nodeElement instanceof HTMLElement)) {
+    return
+  }
+
+  const nodeRect = nodeElement.getBoundingClientRect()
+  const spaceRect = nodeSpace.getBoundingClientRect()
+
+  dragState = {
+    nodeId,
+    offsetX: event.clientX - nodeRect.left + nodeSpace.scrollLeft - spaceRect.left,
+    offsetY: event.clientY - nodeRect.top + nodeSpace.scrollTop - spaceRect.top
+  }
+
+  event.preventDefault()
+})
+
+document.addEventListener('pointermove', (event) => {
+  const nodeSpace = document.getElementById('node-space')
+
+  if (wireDraft && nodeSpace instanceof HTMLElement) {
+    const spaceRect = nodeSpace.getBoundingClientRect()
+    wireDraft.currentPoint = {
+      x: event.clientX - spaceRect.left + nodeSpace.scrollLeft,
+      y: event.clientY - spaceRect.top + nodeSpace.scrollTop
+    }
+    updateWireLayer()
+  }
+
+  if (!dragState || !(nodeSpace instanceof HTMLElement)) {
+    return
+  }
+
+  const node = getNode(dragState.nodeId)
+  const spaceRect = nodeSpace.getBoundingClientRect()
+
+  if (!node) {
+    return
+  }
+
+  node.position.x = Math.max(24, event.clientX - spaceRect.left + nodeSpace.scrollLeft - dragState.offsetX)
+  node.position.y = Math.max(24, event.clientY - spaceRect.top + nodeSpace.scrollTop - dragState.offsetY)
+  updateNodeElementPosition(node.id)
+})
+
+document.addEventListener('pointerup', (event) => {
+  if (wireDraft) {
+    const target = event.target
+    const inputHandle = target instanceof HTMLElement ? target.closest('[data-direction="input"]') : null
+
+    if (inputHandle instanceof HTMLElement && inputHandle.dataset.nodeId && inputHandle.dataset.handleKey) {
+      removeConnection(inputHandle.dataset.nodeId, inputHandle.dataset.handleKey)
+      state.connections.push({
+        id: `wire-${state.nextIds.wire++}`,
+        source: wireDraft.source,
+        target: {
+          handleKey: inputHandle.dataset.handleKey,
+          nodeId: inputHandle.dataset.nodeId
+        }
+      })
+      resetNodeTestsReferencingSource(wireDraft.source.nodeId)
+      setStatus(`Connected ${getSourceLabel(wireDraft.source)} to a new target.`, 'success')
+    } else {
+      render()
+    }
+  }
+
+  dragState = null
+  wireDraft = null
+  updateWireLayer()
+})
+
+window.addEventListener('resize', () => {
+  updateWireLayer()
+})
+
+render()
