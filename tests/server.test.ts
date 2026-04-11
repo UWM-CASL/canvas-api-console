@@ -83,12 +83,15 @@ describe('startServer', () => {
     expect(scriptResponse.body).toContain('Query Builder');
     expect(scriptResponse.body).toContain('about-section');
     expect(scriptResponse.body).toContain("if (!(target instanceof HTMLElement) && !(target instanceof SVGElement))");
+    expect(scriptResponse.body).toContain("data-action=\"dismiss-status\"");
+    expect(scriptResponse.body).toContain("state.statusByTab[tabId]");
     expect(scriptResponse.body).not.toContain('about-panel');
     expect(scriptResponse.body).not.toContain('about-card');
     expect(styleResponse.status).toBe(200);
     expect(styleResponse.body).toContain('.node-space');
     expect(styleResponse.body).toContain('.about-section');
     expect(styleResponse.body).toContain('.icon-svg');
+    expect(styleResponse.body).toContain('.status-dismiss');
     expect(styleResponse.body).toContain('pointer-events: none;');
   });
 

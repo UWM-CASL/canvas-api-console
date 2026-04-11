@@ -132,7 +132,21 @@ function createInitialState() {
     ],
     profiles: [],
     queryView: 'nodes',
-    status: {
+    statusByTab: createEmptyStatusByTab()
+  }
+}
+
+function createEmptyStatusByTab() {
+  return {
+    about: {
+      tone: 'neutral',
+      value: ''
+    },
+    'query-builder': {
+      tone: 'neutral',
+      value: ''
+    },
+    servers: {
       tone: 'neutral',
       value: ''
     }
@@ -307,18 +321,34 @@ function renderNavButton(tabId, iconName, label, description) {
   `
 }
 
-function renderStatusBanner() {
-  if (!state.status.value) {
+function renderStatusBanner(tabId) {
+  const status = state.statusByTab[tabId]
+
+  if (!status?.value) {
     return ''
   }
 
-  const toneClass = state.status.tone === 'error'
+  const toneClass = status.tone === 'error'
     ? ' is-error'
-    : state.status.tone === 'success'
+    : status.tone === 'success'
       ? ' is-success'
       : ''
 
-  return `<div class="status-banner${toneClass}" role="status">${escapeHtml(state.status.value)}</div>`
+  return `
+    <div class="status-banner${toneClass}" role="status">
+      <span>${escapeHtml(status.value)}</span>
+      <button
+        class="status-dismiss"
+        type="button"
+        data-action="dismiss-status"
+        data-status-tab="${tabId}"
+        aria-label="Dismiss notification"
+        title="Dismiss notification"
+      >
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+  `
 }
 
 function renderAboutView() {
@@ -331,7 +361,7 @@ function renderAboutView() {
           <p>Local-first Canvas API tooling for authorized administrators who need inspectable requests, reusable workflows, and local-only credential handling.</p>
         </div>
       </header>
-      ${renderStatusBanner()}
+      ${renderStatusBanner('about')}
       <section class="about-section" aria-labelledby="about-local-heading">
         <div class="about-intro">
           <h2 id="about-local-heading">Work locally, keep credentials local</h2>
@@ -382,7 +412,7 @@ function renderServersView() {
           <button class="primary-button" type="button" data-action="add-profile">Add server profile</button>
         </div>
       </header>
-      ${renderStatusBanner()}
+      ${renderStatusBanner('servers')}
       <div class="helper-banner">
         Keep names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are saved to the OS keychain for local test calls and are never written into <code>.query.json</code> exports.
       </div>
@@ -438,7 +468,7 @@ function renderQueryBuilderView() {
           <p>Wire start-field inputs into testable API nodes, then pipe a tested result into the end node output view.</p>
         </div>
       </header>
-      ${renderStatusBanner()}
+      ${renderStatusBanner('query-builder')}
       <div class="view-tabs" role="tablist" aria-label="Query views">
         ${renderViewTab('nodes', 'nodes', 'Node View', 'Arrange nodes and connections on the workspace.')}
         ${renderViewTab('output', 'output', 'Output View', 'Inspect start-field inputs and end-node output.')}
@@ -1093,10 +1123,7 @@ async function loadPersistedProfiles() {
     }))
     state.nextIds = computeNextIds(state)
   } catch {
-    state.status = {
-      tone: 'error',
-      value: 'Unable to load saved server profiles from local storage.'
-    }
+    setStatus('Unable to load saved server profiles from local storage.', 'error', 'servers')
   }
 
   render()
@@ -1166,8 +1193,13 @@ function queueProfileSave() {
   }, PROFILE_SAVE_DELAY_MS)
 }
 
-function setStatus(value, tone = 'neutral') {
-  state.status = { tone, value }
+function setStatus(value, tone = 'neutral', tabId = state.activeTab) {
+  state.statusByTab[tabId] = { tone, value }
+  render()
+}
+
+function clearStatus(tabId = state.activeTab) {
+  state.statusByTab[tabId] = { tone: 'neutral', value: '' }
   render()
 }
 
@@ -1764,6 +1796,11 @@ function handleAction(target) {
   if (action === 'switch-tab') {
     state.activeTab = actionTarget.dataset.tab
     render()
+    return true
+  }
+
+  if (action === 'dismiss-status') {
+    clearStatus(actionTarget.dataset.statusTab)
     return true
   }
 
