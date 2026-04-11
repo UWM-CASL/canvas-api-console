@@ -84,6 +84,10 @@ describe('startServer', () => {
     expect(scriptResponse.body).toContain('about-section');
     expect(scriptResponse.body).toContain('Canvas environments');
     expect(scriptResponse.body).toContain('Add Server Profile');
+    expect(scriptResponse.body).toContain('Add field');
+    expect(scriptResponse.body).toContain('Enter a Name');
+    expect(scriptResponse.body).toContain('Number (Integer)');
+    expect(scriptResponse.body).toContain('Boolean (True/False)');
     expect(scriptResponse.body).toContain("if (!(target instanceof HTMLElement) && !(target instanceof SVGElement))");
     expect(scriptResponse.body).toContain("data-action=\"dismiss-status\"");
     expect(scriptResponse.body).toContain("state.statusByTab[tabId]");

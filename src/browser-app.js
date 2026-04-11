@@ -1,8 +1,15 @@
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-const FIELD_TYPES = ['text', 'number', 'checkbox', 'date', 'select']
+const FIELD_TYPES = [
+  { label: 'Text', value: 'text' },
+  { label: 'Number (Integer)', value: 'integer' },
+  { label: 'Number (Decimal)', value: 'decimal' },
+  { label: 'Date', value: 'date' },
+  { label: 'Boolean (True/False)', value: 'boolean' }
+]
+const FIELD_TYPE_VALUES = FIELD_TYPES.map((fieldType) => fieldType.value)
 const PROFILE_FIELDS = ['name', 'host', 'token']
 const API_NODE_FIELDS = ['endpoint', 'method', 'profileId']
-const START_FIELD_FIELDS = ['name', 'type', 'defaultValue', 'optionsText']
+const START_FIELD_FIELDS = ['name', 'type', 'defaultValue']
 const PARAM_FIELDS = ['name', 'value']
 const PROFILE_SAVE_DELAY_MS = 300
 const ICONS = {
@@ -30,6 +37,28 @@ const ICONS = {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 5v14"></path>
       <path d="M5 12h14"></path>
+    </svg>
+  `,
+  eyeClosed: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 3l18 18"></path>
+      <path d="M10.6 10.6a3 3 0 0 0 4.24 4.24"></path>
+      <path d="M9.88 5.09A10.94 10.94 0 0 1 12 4.9c5.1 0 9.27 4.03 10 7.1a11.8 11.8 0 0 1-3.22 4.62"></path>
+      <path d="M6.7 6.7C4.44 8 2.82 9.91 2 12c.46 1.18 1.24 2.42 2.33 3.56"></path>
+    </svg>
+  `,
+  eyeOpen: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  `,
+  field: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 4h12"></path>
+      <path d="M6 10h12"></path>
+      <path d="M6 16h8"></path>
+      <circle cx="18" cy="16" r="2"></circle>
     </svg>
   `,
   nodes: `
@@ -78,6 +107,15 @@ const ICONS = {
       <path d="M12 7h4"></path>
       <path d="M12 17h4"></path>
     </svg>
+  `,
+  trash: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16"></path>
+      <path d="M10 11v6"></path>
+      <path d="M14 11v6"></path>
+      <path d="M6 7l1 13h10l1-13"></path>
+      <path d="M9 7V4h6v3"></path>
+    </svg>
   `
 }
 
@@ -98,11 +136,9 @@ function createInitialState() {
   return {
     activeTab: 'about',
     connections: [],
-    formValues: {
-      'field-1': ''
-    },
+    formValues: {},
     nextIds: {
-      field: 2,
+      field: 1,
       node: 1,
       param: 2,
       profile: 1,
@@ -110,15 +146,7 @@ function createInitialState() {
     },
     nodes: [
       {
-        fields: [
-          {
-            defaultValue: '',
-            id: 'field-1',
-            name: 'courseId',
-            optionsText: '',
-            type: 'text'
-          }
-        ],
+        fields: [],
         id: 'start',
         position: { x: 56, y: 72 },
         type: 'start'
@@ -211,14 +239,13 @@ function createProfile() {
 
 function createStartField() {
   const fieldId = `field-${state.nextIds.field++}`
-  const fieldNumber = numericSuffix(fieldId)
 
   return {
     defaultValue: '',
     id: fieldId,
-    name: `field_${fieldNumber}`,
-    optionsText: '',
-    type: 'text'
+    name: '',
+    type: 'text',
+    visible: true
   }
 }
 
@@ -252,7 +279,7 @@ function syncFormValues() {
   const nextValues = {}
 
   for (const field of startNode.fields) {
-    if (field.type === 'checkbox') {
+    if (field.type === 'boolean') {
       nextValues[field.id] = state.formValues[field.id] === undefined
         ? field.defaultValue === 'true'
         : Boolean(state.formValues[field.id])
@@ -568,14 +595,24 @@ function renderStartNode(node) {
         <div>
           <h3>Start node</h3>
         </div>
-        <span class="muted">Form inputs</span>
+        <button
+          class="ghost-button icon-button"
+          type="button"
+          data-action="add-start-field"
+          aria-label="Add field"
+          title="Add Field"
+        >
+          <span class="icon-button-mark" aria-hidden="true">${renderIcon('field')}</span>
+          <span class="sr-only">Add field</span>
+        </button>
       </div>
       <div class="node-body">
-        <div class="helper-text">Add the fields users see at the top of the output view.</div>
+        <div class="helper-text">Add fields to define reusable inputs for the output view.</div>
         <div class="field-list">
-          ${node.fields.map((field) => renderStartField(field)).join('')}
+          ${node.fields.length > 0
+            ? node.fields.map((field) => renderStartField(field)).join('')
+            : '<div class="empty-state"><h3>No fields yet</h3><p>Add a field to start shaping reusable input.</p></div>'}
         </div>
-        <button class="secondary-button" type="button" data-action="add-start-field">Add field</button>
       </div>
     </section>
   `
@@ -583,55 +620,94 @@ function renderStartNode(node) {
 
 function renderStartField(field) {
   const typeOptions = FIELD_TYPES.map((type) => `
-    <option value="${type}"${field.type === type ? ' selected' : ''}>${type}</option>
+    <option value="${type.value}"${field.type === type.value ? ' selected' : ''}>${type.label}</option>
   `).join('')
+  const fieldLabel = field.name.trim() || 'Enter a Name'
+  const visibilityLabel = field.visible ? 'Hide field from Output View' : 'Show field on Output View'
+  const visibilityIcon = field.visible ? 'eyeOpen' : 'eyeClosed'
 
   return `
     <div class="field-row">
-      <div class="field-actions">
-        <strong>${escapeHtml(field.name || 'Untitled field')}</strong>
-        <div class="inline-actions">
-          ${renderOutputHandle('start', field.id, `Use ${field.name || 'field'} as an input source`)}
-          <button class="ghost-button" type="button" data-action="remove-start-field" data-field-id="${field.id}">Remove</button>
+      <div class="field-summary">
+        <div class="field-actions">
+          <strong>${escapeHtml(fieldLabel)}</strong>
+          <div class="inline-actions">
+            <button
+              class="ghost-button icon-button"
+              type="button"
+              data-action="toggle-start-field-visibility"
+              data-field-id="${field.id}"
+              aria-label="${escapeHtml(visibilityLabel)}"
+              title="${escapeHtml(visibilityLabel)}"
+            >
+              <span class="icon-button-mark" aria-hidden="true">${renderIcon(visibilityIcon)}</span>
+              <span class="sr-only">${escapeHtml(visibilityLabel)}</span>
+            </button>
+            <button
+              class="ghost-button icon-button"
+              type="button"
+              data-action="remove-start-field"
+              data-field-id="${field.id}"
+              aria-label="Delete field"
+              title="Delete Field"
+            >
+              <span class="icon-button-mark" aria-hidden="true">${renderIcon('trash')}</span>
+              <span class="sr-only">Delete field</span>
+            </button>
+            ${renderOutputHandle('start', field.id, `Use ${fieldLabel} as an input source`)}
+          </div>
         </div>
       </div>
-      <div class="field-grid">
-        <label class="control-group">
-          <span>Name</span>
-          <input type="text" value="${escapeHtml(field.name)}" data-start-field-id="${field.id}" data-start-field-field="name" />
-        </label>
-        <label class="control-group">
-          <span>Type</span>
-          <select data-start-field-id="${field.id}" data-start-field-field="type">${typeOptions}</select>
-        </label>
-        ${renderStartFieldValueEditor(field)}
+      <div class="field-editor">
+        <div class="field-grid">
+          <label class="control-group">
+            <span>Name</span>
+            <input
+              type="text"
+              value="${escapeHtml(field.name)}"
+              placeholder="Enter a Name"
+              data-start-field-id="${field.id}"
+              data-start-field-field="name"
+            />
+          </label>
+          <label class="control-group">
+            <span>Type</span>
+            <select data-start-field-id="${field.id}" data-start-field-field="type">${typeOptions}</select>
+          </label>
+          ${renderStartFieldValueEditor(field)}
+        </div>
       </div>
-      ${field.type === 'select'
-        ? `<label class="control-group"><span>Options</span><input type="text" value="${escapeHtml(field.optionsText)}" placeholder="Option A, Option B" data-start-field-id="${field.id}" data-start-field-field="optionsText" /></label>`
-        : ''}
     </div>
   `
 }
 
 function renderStartFieldValueEditor(field) {
-  if (field.type === 'checkbox') {
+  if (field.type === 'boolean') {
     return `
       <label class="control-group">
-        <span>Default</span>
+        <span>Default Value</span>
         <select data-start-field-id="${field.id}" data-start-field-field="defaultValue">
-          <option value="false"${field.defaultValue !== 'true' ? ' selected' : ''}>Unchecked</option>
-          <option value="true"${field.defaultValue === 'true' ? ' selected' : ''}>Checked</option>
+          <option value="false"${field.defaultValue !== 'true' ? ' selected' : ''}>False</option>
+          <option value="true"${field.defaultValue === 'true' ? ' selected' : ''}>True</option>
         </select>
       </label>
     `
   }
 
+  const inputType = field.type === 'text'
+    ? 'text'
+    : field.type === 'date'
+      ? 'date'
+      : 'number'
+  const step = field.type === 'integer' ? '1' : field.type === 'decimal' ? 'any' : null
+
   return `
     <label class="control-group">
-      <span>Default</span>
+      <span>Default Value</span>
       <input
-        type="${field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}"
+        type="${inputType}"
         value="${escapeHtml(field.defaultValue)}"
+        ${step ? `step="${step}"` : ''}
         data-start-field-id="${field.id}"
         data-start-field-field="defaultValue"
       />
@@ -793,6 +869,7 @@ function renderOutputView() {
   const startNode = getStartNode()
   const endNode = getEndNode()
   const endValue = resolveEndNodeValue()
+  const visibleFields = startNode.fields.filter((field) => field.visible !== false)
 
   return `
     <section class="output-layout">
@@ -805,9 +882,9 @@ function renderOutputView() {
           <button class="ghost-button" type="button" data-action="reset-form-values">Reset to defaults</button>
         </div>
         <div class="output-fields">
-          ${startNode.fields.length > 0
-            ? startNode.fields.map((field) => renderOutputField(field)).join('')
-            : '<div class="empty-state"><h3>No start fields</h3><p>Add form fields on the start node to collect reusable input values.</p></div>'}
+          ${visibleFields.length > 0
+            ? visibleFields.map((field) => renderOutputField(field)).join('')
+            : '<div class="empty-state"><h3>No visible fields</h3><p>Add a field and leave it visible to collect reusable input values here.</p></div>'}
         </div>
       </section>
       <section class="output-card">
@@ -828,27 +905,12 @@ function renderOutputView() {
 function renderOutputField(field) {
   const value = state.formValues[field.id]
 
-  if (field.type === 'checkbox') {
+  if (field.type === 'boolean') {
     return `
       <section class="field-card">
         <label>
-          <span>${escapeHtml(field.name || 'Untitled field')}</span>
+          <span>${escapeHtml(field.name || 'Enter a Name')}</span>
           <input type="checkbox" ${value ? 'checked' : ''} data-form-field-id="${field.id}" />
-        </label>
-      </section>
-    `
-  }
-
-  if (field.type === 'select') {
-    const options = getFieldOptions(field)
-
-    return `
-      <section class="field-card">
-        <label>
-          <span>${escapeHtml(field.name || 'Untitled field')}</span>
-          <select data-form-field-id="${field.id}">
-            ${options.map((option) => `<option value="${escapeHtml(option)}"${String(value) === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
-          </select>
         </label>
       </section>
     `
@@ -857,8 +919,13 @@ function renderOutputField(field) {
   return `
     <section class="field-card">
       <label>
-        <span>${escapeHtml(field.name || 'Untitled field')}</span>
-        <input type="${field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}" value="${escapeHtml(value)}" data-form-field-id="${field.id}" />
+        <span>${escapeHtml(field.name || 'Enter a Name')}</span>
+        <input
+          type="${field.type === 'text' ? 'text' : field.type === 'date' ? 'date' : 'number'}"
+          ${field.type === 'integer' ? 'step="1"' : field.type === 'decimal' ? 'step="any"' : ''}
+          value="${escapeHtml(value)}"
+          data-form-field-id="${field.id}"
+        />
       </label>
     </section>
   `
@@ -969,13 +1036,6 @@ function renderInputHandle(nodeId, handleKey, label) {
       title="${escapeHtml(label)}"
     >●</button>
   `
-}
-
-function getFieldOptions(field) {
-  return field.optionsText
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
 }
 
 function parseColumns(columnsText) {
@@ -1411,15 +1471,15 @@ function hydrateState(parsed) {
       nextState.nodes = loadedNodes.map((node, index) => {
         if (node.type === 'start') {
           return {
-            fields: Array.isArray(node.fields) && node.fields.length > 0
+            fields: Array.isArray(node.fields)
               ? node.fields.map((field, fieldIndex) => ({
                   defaultValue: typeof field.defaultValue === 'string' ? field.defaultValue : '',
                   id: typeof field.id === 'string' ? field.id : `field-${fieldIndex + 1}`,
-                  name: typeof field.name === 'string' ? field.name : `field_${fieldIndex + 1}`,
-                  optionsText: typeof field.optionsText === 'string' ? field.optionsText : '',
-                  type: FIELD_TYPES.includes(field.type) ? field.type : 'text'
+                  name: typeof field.name === 'string' ? field.name : '',
+                  type: FIELD_TYPE_VALUES.includes(field.type) ? field.type : 'text',
+                  visible: field.visible !== false
                 }))
-              : [createStartField()],
+              : [],
             id: typeof node.id === 'string' ? node.id : 'start',
             position: normalizePosition(node.position, index),
             type: 'start'
@@ -1704,29 +1764,12 @@ function mutateControl(target, eventType = 'input') {
       field[startFieldField] = target.value
 
       if (startFieldField === 'type') {
-        if (field.type === 'checkbox') {
-          field.defaultValue = 'false'
-          state.formValues[field.id] = false
-        } else if (field.type === 'select') {
-          field.optionsText = field.optionsText || 'Option A, Option B'
-          field.defaultValue = getFieldOptions(field)[0] ?? ''
-          state.formValues[field.id] = field.defaultValue
-        } else {
-          state.formValues[field.id] = field.defaultValue
-        }
+        field.defaultValue = field.type === 'boolean' ? 'false' : ''
+        state.formValues[field.id] = field.type === 'boolean' ? false : field.defaultValue
       }
 
       if (startFieldField === 'defaultValue') {
-        state.formValues[field.id] = field.type === 'checkbox' ? field.defaultValue === 'true' : field.defaultValue
-      }
-
-      if (startFieldField === 'optionsText' && field.type === 'select') {
-        const options = getFieldOptions(field)
-        const nextValue = options.includes(String(state.formValues[field.id]))
-          ? String(state.formValues[field.id])
-          : options[0] ?? ''
-        field.defaultValue = nextValue
-        state.formValues[field.id] = nextValue
+        state.formValues[field.id] = field.type === 'boolean' ? field.defaultValue === 'true' : field.defaultValue
       }
 
       render()
@@ -1776,7 +1819,7 @@ function mutateControl(target, eventType = 'input') {
       return
     }
 
-    if (field.type === 'checkbox' && target instanceof HTMLInputElement) {
+    if (field.type === 'boolean' && target instanceof HTMLInputElement) {
       state.formValues[formFieldId] = target.checked
     } else {
       state.formValues[formFieldId] = target.value
@@ -1876,8 +1919,23 @@ function handleAction(target) {
     if (startNode) {
       const field = createStartField()
       startNode.fields.push(field)
-      state.formValues[field.id] = field.defaultValue
+      state.formValues[field.id] = ''
       setStatus('Added a start-node field.', 'success')
+    }
+
+    return true
+  }
+
+  if (action === 'toggle-start-field-visibility') {
+    const startNode = getStartNode()
+    const field = startNode?.fields.find((item) => item.id === actionTarget.dataset.fieldId)
+
+    if (field) {
+      field.visible = !field.visible
+      setStatus(
+        field.visible ? 'Field is visible on the Output View.' : 'Field is hidden from the Output View.',
+        'success'
+      )
     }
 
     return true
@@ -1887,15 +1945,13 @@ function handleAction(target) {
     const fieldId = actionTarget.dataset.fieldId
     const startNode = getStartNode()
 
-    if (startNode && startNode.fields.length > 1) {
+    if (startNode) {
       startNode.fields = startNode.fields.filter((field) => field.id !== fieldId)
       delete state.formValues[fieldId]
       state.connections = state.connections.filter(
         (connection) => !(connection.source.nodeId === 'start' && connection.source.handleKey === fieldId)
       )
       setStatus('Removed the selected start-node field.', 'success')
-    } else {
-      setStatus('Keep at least one field on the start node.', 'error')
     }
 
     return true
@@ -1959,7 +2015,7 @@ function handleAction(target) {
 
     if (startNode) {
       for (const field of startNode.fields) {
-        state.formValues[field.id] = field.type === 'checkbox' ? field.defaultValue === 'true' : field.defaultValue
+        state.formValues[field.id] = field.type === 'boolean' ? field.defaultValue === 'true' : field.defaultValue
       }
       setStatus('Reset output-view field values to the configured defaults.', 'success')
     }

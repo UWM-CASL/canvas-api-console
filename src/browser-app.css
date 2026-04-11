@@ -486,6 +486,21 @@ pre {
   background: transparent;
 }
 
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+.icon-button-mark {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+}
+
 .toolbar-button {
   display: grid;
   justify-items: center;
@@ -595,9 +610,22 @@ pre {
   align-items: start;
 }
 
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 9rem) minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+}
+
 .inline-actions {
   justify-content: flex-start;
   flex-wrap: wrap;
+}
+
+.field-summary,
+.field-editor {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .field-grid {
@@ -605,8 +633,7 @@ pre {
   align-items: end;
 }
 
-.connection-label,
-.badge {
+.connection-label {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -782,5 +809,9 @@ pre {
 
   .param-row {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
   }
 }
