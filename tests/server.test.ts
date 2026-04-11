@@ -82,11 +82,14 @@ describe('startServer', () => {
     expect(scriptResponse.status).toBe(200);
     expect(scriptResponse.body).toContain('Query Builder');
     expect(scriptResponse.body).toContain('about-section');
+    expect(scriptResponse.body).toContain("if (!(target instanceof HTMLElement) && !(target instanceof SVGElement))");
     expect(scriptResponse.body).not.toContain('about-panel');
     expect(scriptResponse.body).not.toContain('about-card');
     expect(styleResponse.status).toBe(200);
     expect(styleResponse.body).toContain('.node-space');
     expect(styleResponse.body).toContain('.about-section');
+    expect(styleResponse.body).toContain('.icon-svg');
+    expect(styleResponse.body).toContain('pointer-events: none;');
   });
 
   it('tests Canvas nodes through the local API endpoint', async () => {

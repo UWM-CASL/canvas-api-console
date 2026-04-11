@@ -1751,11 +1751,11 @@ function mutateControl(target, eventType = 'input') {
 function handleAction(target) {
   const actionTarget = target.closest('[data-action]')
 
-  if (!(actionTarget instanceof HTMLElement)) {
+  if (!(actionTarget instanceof HTMLElement) && !(actionTarget instanceof SVGElement)) {
     return false
   }
 
-  const action = actionTarget.dataset.action
+  const action = actionTarget.getAttribute('data-action')
 
   if (!action) {
     return false
@@ -1930,7 +1930,7 @@ function handleAction(target) {
 appRoot.addEventListener('click', (event) => {
   const target = event.target
 
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof HTMLElement) && !(target instanceof SVGElement)) {
     return
   }
 
@@ -1958,7 +1958,7 @@ appRoot.addEventListener('change', (event) => {
 appRoot.addEventListener('pointerdown', (event) => {
   const target = event.target
 
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof HTMLElement) && !(target instanceof SVGElement)) {
     return
   }
 
