@@ -591,9 +591,9 @@ function renderNode(node) {
 function renderStartNode(node) {
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="start" style="left: ${node.position.x}px; top: ${node.position.y}px;">
-      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
+      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}" tabindex="0" aria-label="Start node title bar">
         <div>
-          <h3>Start node</h3>
+          <h3>Start</h3>
         </div>
         <button
           class="ghost-button icon-button"
@@ -625,6 +625,7 @@ function renderStartField(field) {
   const fieldLabel = field.name.trim() || 'Enter a Name'
   const visibilityLabel = field.visible ? 'Hide field from Output View' : 'Show field on Output View'
   const visibilityIcon = field.visible ? 'eyeOpen' : 'eyeClosed'
+  const readyToConnect = isStartFieldReady(field)
 
   return `
     <div class="field-row">
@@ -658,25 +659,53 @@ function renderStartField(field) {
         </div>
       </div>
       <div class="field-editor">
-        <div class="field-grid">
-          <label class="control-group">
-            <span>Name</span>
-            <input
-              type="text"
-              value="${escapeHtml(field.name)}"
-              placeholder="Enter a Name"
-              data-start-field-id="${field.id}"
-              data-start-field-field="name"
-            />
-          </label>
-          <label class="control-group">
-            <span>Type</span>
-            <select data-start-field-id="${field.id}" data-start-field-field="type">${typeOptions}</select>
-          </label>
-          ${renderStartFieldValueEditor(field)}
+        <div class="field-editor-layout">
+          <div class="field-grid">
+            <label class="control-group">
+              <span>Name</span>
+              <input
+                type="text"
+                value="${escapeHtml(field.name)}"
+                placeholder="Enter a Name"
+                data-start-field-id="${field.id}"
+                data-start-field-field="name"
+              />
+            </label>
+            <label class="control-group">
+              <span>Type</span>
+              <select data-start-field-id="${field.id}" data-start-field-field="type">${typeOptions}</select>
+            </label>
+            ${renderStartFieldValueEditor(field)}
+          </div>
+          ${readyToConnect ? renderFieldConnector(field.id, fieldLabel) : ''}
         </div>
       </div>
     </div>
+  `
+}
+
+function isStartFieldReady(field) {
+  if (!field.name.trim() || !field.type) {
+    return false
+  }
+
+  if (field.type === 'boolean') {
+    return field.defaultValue === 'true' || field.defaultValue === 'false'
+  }
+
+  return field.defaultValue.trim() !== ''
+}
+
+function renderFieldConnector(fieldId, fieldLabel) {
+  return `
+    <span
+      class="field-connector"
+      data-direction="output"
+      data-node-id="start"
+      data-handle-key="${fieldId}"
+      title="${escapeHtml(`Use ${fieldLabel} as an input source`)}"
+      aria-hidden="true"
+    >●</span>
   `
 }
 
@@ -728,7 +757,7 @@ function renderApiNode(node) {
 
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="api" style="left: ${node.position.x}px; top: ${node.position.y}px;">
-      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
+      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}" tabindex="0" aria-label="${escapeHtml(`${node.endpoint || 'API node'} title bar`)}">
         <div>
           <h3>${escapeHtml(node.endpoint || 'API node')}</h3>
         </div>
@@ -841,9 +870,9 @@ function renderEndNode(node) {
 
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="end" style="left: ${node.position.x}px; top: ${node.position.y}px;">
-      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
+      <div class="node-header" data-drag-handle="true" data-node-id="${node.id}" tabindex="0" aria-label="End node title bar">
         <div>
-          <h3>Output node</h3>
+          <h3>End</h3>
         </div>
         ${renderInputHandle(node.id, 'input', 'Connect a tested output into the end node')}
       </div>

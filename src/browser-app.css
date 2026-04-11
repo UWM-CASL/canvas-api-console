@@ -656,6 +656,13 @@ pre {
   gap: 0.5rem;
 }
 
+.field-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
 .field-summary {
   align-content: start;
 }
@@ -676,6 +683,25 @@ pre {
 .field-grid {
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   align-items: end;
+}
+
+.field-connector {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent);
+  cursor: grab;
+  user-select: none;
+}
+
+.field-connector:hover {
+  color: var(--accent-strong);
+}
+
+.field-connector:active {
+  cursor: grabbing;
 }
 
 .connection-label {
@@ -857,6 +883,10 @@ pre {
   }
 
   .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .field-editor-layout {
     grid-template-columns: 1fr;
   }
 }
