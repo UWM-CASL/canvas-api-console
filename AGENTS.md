@@ -324,6 +324,27 @@ Required expectations:
 
 If a local web UI or desktop UI is built, ensure controls are labeled clearly enough for assistive technology.
 
+### Icon control style guide
+
+For compact local UI controls, prefer icons over fully articulated buttons when the action is already clear from context.
+
+Required behavior:
+
+- Use icons instead of text-heavy buttons where the UI already establishes the action context.
+- Every icon control must include a tooltip or equivalent visible hover text.
+- Every icon control must include an accessible text label for assistive technology, such as `aria-label` and supporting screen-reader-only text where appropriate.
+- Keep icon meaning consistent across the app. Do not reuse the same icon for unrelated actions or swap icon meanings between screens.
+- Maintain a stable icon-to-action mapping in the code so future UI work does not drift.
+
+Preferred mappings unless the user directs otherwise:
+
+- add/create: plus icon
+- open/load/import: open or folder icon
+- save/export: save icon
+- show/visible: open-eye icon
+- hide/not visible: closed-eye icon
+- delete/remove: trash icon
+
 ---
 
 ## Documentation requirements

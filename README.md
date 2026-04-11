@@ -35,6 +35,23 @@ The local app now includes:
 - top tabs for node and output views inside Query Builder
 - export and import support for sanitized `.query.json` wireframes
 
+## UI conventions
+
+The UI uses compact icon controls where the surrounding context already explains the action.
+
+- icon-only controls must still provide tooltips
+- icon-only controls must still provide accessible text for assistive technology
+- icon meanings stay consistent across the app
+
+Current icon mappings:
+
+- plus: add/create
+- open or folder: open/load/import
+- save: save/export
+- open eye: visible/show
+- closed eye: hidden/hide
+- trash: delete/remove
+
 ## Development commands
 
 ```bash
