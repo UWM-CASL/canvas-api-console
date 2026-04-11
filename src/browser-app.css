@@ -519,6 +519,11 @@ pre {
   background: transparent;
 }
 
+.icon-control:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .toolbar-button {
   display: grid;
   justify-items: center;
@@ -593,6 +598,12 @@ pre {
   padding: 0.8rem;
 }
 
+.node-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .wire-layer {
   position: absolute;
   inset: 0;
@@ -649,7 +660,7 @@ pre {
 }
 
 .param-row {
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: start;
 }
 
@@ -703,6 +714,19 @@ pre {
   margin-left: auto;
 }
 
+.field-icon-actions .handle {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+
+.field-icon-actions .handle:hover {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
 .field-grid {
   grid-template-columns: 1fr;
   align-items: stretch;
@@ -725,6 +749,23 @@ pre {
 .field-grid .control-group input,
 .field-grid .control-group select {
   width: 100%;
+}
+
+.section-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.small-action {
+  justify-self: start;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.control-group-spacer {
+  grid-template-columns: 6.5rem minmax(0, 1fr);
 }
 
 .field-connector {
@@ -921,7 +962,7 @@ pre {
   }
 
   .param-row {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .field-row {

@@ -61,6 +61,13 @@ const ICONS = {
       <circle cx="18" cy="16" r="2"></circle>
     </svg>
   `,
+  flask: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 3h4"></path>
+      <path d="M11 3v5l-5.5 9.5A2 2 0 0 0 7.2 21h9.6a2 2 0 0 0 1.7-3.5L13 8V3"></path>
+      <path d="M8.5 14h7"></path>
+    </svg>
+  `,
   nodes: `
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="4" y="5" width="6" height="6"></rect>
@@ -754,6 +761,7 @@ function renderApiNode(node) {
     <option value="${method}"${node.method === method ? ' selected' : ''}>${method}</option>
   `).join('')
   const outputDescriptors = getOutputDescriptors(node)
+  const testLabel = node.testing ? 'Testing node' : 'Test node'
 
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="api" style="left: ${node.position.x}px; top: ${node.position.y}px;">
@@ -762,8 +770,29 @@ function renderApiNode(node) {
           <h3>${escapeHtml(node.endpoint || 'API node')}</h3>
         </div>
         <div class="node-actions">
-          <button class="secondary-button" type="button" data-action="test-node" data-node-id="${node.id}" ${node.testing ? 'disabled' : ''}>${node.testing ? 'Testing…' : 'Test node'}</button>
-          <button class="ghost-button" type="button" data-action="remove-node" data-node-id="${node.id}">Remove</button>
+          <button
+            class="icon-control"
+            type="button"
+            data-action="test-node"
+            data-node-id="${node.id}"
+            aria-label="${escapeHtml(testLabel)}"
+            title="${escapeHtml(testLabel)}"
+            ${node.testing ? 'disabled' : ''}
+          >
+            <span class="icon-button-mark" aria-hidden="true">${renderIcon('flask')}</span>
+            <span class="sr-only">${escapeHtml(testLabel)}</span>
+          </button>
+          <button
+            class="icon-control"
+            type="button"
+            data-action="remove-node"
+            data-node-id="${node.id}"
+            aria-label="Delete node"
+            title="Delete Node"
+          >
+            <span class="icon-button-mark" aria-hidden="true">${renderIcon('trash')}</span>
+            <span class="sr-only">Delete node</span>
+          </button>
         </div>
       </div>
       <div class="node-body">
@@ -782,9 +811,21 @@ function renderApiNode(node) {
           <input type="text" value="${escapeHtml(node.endpoint)}" placeholder="/api/v1/courses" data-node-id="${node.id}" data-node-field="endpoint" />
         </label>
         <div class="control-group">
-          <span>Query parameters</span>
+          <div class="section-action-row">
+            <span>Query parameters</span>
+            <button
+              class="icon-control"
+              type="button"
+              data-action="add-param"
+              data-node-id="${node.id}"
+              aria-label="Add query parameter"
+              title="Add Query Parameter"
+            >
+              <span class="icon-button-mark" aria-hidden="true">${renderIcon('field')}</span>
+              <span class="sr-only">Add query parameter</span>
+            </button>
+          </div>
           <div class="param-list">${node.params.map((param) => renderParamRow(node, param)).join('')}</div>
-          <button class="secondary-button" type="button" data-action="add-param" data-node-id="${node.id}">Add query parameter</button>
         </div>
         <div class="control-group">
           <span>Output handles</span>
@@ -801,28 +842,73 @@ function renderApiNode(node) {
 function renderParamRow(node, param) {
   const connection = getConnectionForTarget(node.id, `param:${param.id}`)
   const sourceLabel = connection ? getSourceLabel(connection.source) : ''
+  const paramLabel = param.name.trim() || 'Enter a Name'
 
   return `
     <div class="param-row">
-      <div>
-        ${renderInputHandle(node.id, `param:${param.id}`, `Wire a value into ${param.name || 'this query parameter'}`)}
+      <div class="field-summary">
+        <div class="field-actions">
+          <strong>${escapeHtml(paramLabel)}</strong>
+          <div class="field-icon-actions">
+            ${renderInputHandle(node.id, `param:${param.id}`, `Wire a value into ${paramLabel}`)}
+            <button
+              class="icon-control"
+              type="button"
+              data-action="remove-param"
+              data-node-id="${node.id}"
+              data-param-id="${param.id}"
+              aria-label="Delete query parameter"
+              title="Delete Query Parameter"
+            >
+              <span class="icon-button-mark" aria-hidden="true">${renderIcon('trash')}</span>
+              <span class="sr-only">Delete query parameter</span>
+            </button>
+          </div>
+        </div>
+        <div class="helper-text">${connection ? `Connected from ${escapeHtml(sourceLabel)}` : 'Manual value'}</div>
       </div>
-      <label class="control-group">
-        <span class="sr-only">Parameter name</span>
-        <input type="text" placeholder="parameter_name" value="${escapeHtml(param.name)}" data-node-id="${node.id}" data-param-id="${param.id}" data-param-field="name" />
-      </label>
-      <label class="control-group">
-        <span class="sr-only">Parameter value</span>
-        <input type="text" placeholder="Manual value" value="${escapeHtml(param.value)}" data-node-id="${node.id}" data-param-id="${param.id}" data-param-field="value" ${connection ? 'disabled' : ''} />
-        ${connection
-          ? `<span class="connection-label">Connected from ${escapeHtml(sourceLabel)}</span>`
-          : '<span class="connection-label">Manual value</span>'}
-      </label>
-      <div class="inline-actions">
-        ${connection
-          ? `<button class="ghost-button" type="button" data-action="remove-connection" data-target-node-id="${node.id}" data-target-handle-key="param:${param.id}">Disconnect</button>`
-          : ''}
-        <button class="ghost-button" type="button" data-action="remove-param" data-node-id="${node.id}" data-param-id="${param.id}">Remove</button>
+      <div class="field-editor">
+        <div class="field-grid">
+          <label class="control-group">
+            <span>Name</span>
+            <input
+              type="text"
+              placeholder="Enter a Name"
+              value="${escapeHtml(param.name)}"
+              data-node-id="${node.id}"
+              data-param-id="${param.id}"
+              data-param-field="name"
+            />
+          </label>
+          <label class="control-group">
+            <span>Value</span>
+            <input
+              type="text"
+              placeholder="Manual value"
+              value="${escapeHtml(param.value)}"
+              data-node-id="${node.id}"
+              data-param-id="${param.id}"
+              data-param-field="value"
+              ${connection ? 'disabled' : ''}
+            />
+          </label>
+          ${connection
+            ? `
+              <div class="control-group control-group-spacer">
+                <span></span>
+                <button
+                  class="ghost-button small-action"
+                  type="button"
+                  data-action="remove-connection"
+                  data-target-node-id="${node.id}"
+                  data-target-handle-key="param:${param.id}"
+                >
+                  Disconnect
+                </button>
+              </div>
+            `
+            : ''}
+        </div>
       </div>
     </div>
   `
