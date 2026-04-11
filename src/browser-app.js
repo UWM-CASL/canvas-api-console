@@ -299,7 +299,101 @@ function syncFormValues() {
   state.formValues = nextValues
 }
 
-function render() {
+function escapeSelectorValue(value) {
+  return String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+}
+
+function getControlSelector(control) {
+  if (!(control instanceof HTMLElement)) {
+    return null
+  }
+
+  if (control.id) {
+    return `[id="${escapeSelectorValue(control.id)}"]`
+  }
+
+  if (control.dataset.profileId && control.dataset.profileField) {
+    return `[data-profile-id="${escapeSelectorValue(control.dataset.profileId)}"][data-profile-field="${escapeSelectorValue(control.dataset.profileField)}"]`
+  }
+
+  if (control.dataset.nodeId && control.dataset.nodeField) {
+    return `[data-node-id="${escapeSelectorValue(control.dataset.nodeId)}"][data-node-field="${escapeSelectorValue(control.dataset.nodeField)}"]`
+  }
+
+  if (control.dataset.startFieldId && control.dataset.startFieldField) {
+    return `[data-start-field-id="${escapeSelectorValue(control.dataset.startFieldId)}"][data-start-field-field="${escapeSelectorValue(control.dataset.startFieldField)}"]`
+  }
+
+  if (control.dataset.nodeId && control.dataset.paramId && control.dataset.paramField) {
+    return `[data-node-id="${escapeSelectorValue(control.dataset.nodeId)}"][data-param-id="${escapeSelectorValue(control.dataset.paramId)}"][data-param-field="${escapeSelectorValue(control.dataset.paramField)}"]`
+  }
+
+  if (control.dataset.endField) {
+    return `[data-end-field="${escapeSelectorValue(control.dataset.endField)}"]`
+  }
+
+  if (control.dataset.formFieldId) {
+    return `[data-form-field-id="${escapeSelectorValue(control.dataset.formFieldId)}"]`
+  }
+
+  return null
+}
+
+function captureFocusedControl() {
+  const activeElement = document.activeElement
+
+  if (!isFormControl(activeElement)) {
+    return null
+  }
+
+  const selector = getControlSelector(activeElement)
+
+  if (!selector) {
+    return null
+  }
+
+  return {
+    selectionDirection: 'selectionDirection' in activeElement ? activeElement.selectionDirection : null,
+    selectionEnd: 'selectionEnd' in activeElement ? activeElement.selectionEnd : null,
+    selectionStart: 'selectionStart' in activeElement ? activeElement.selectionStart : null,
+    selector
+  }
+}
+
+function restoreFocusedControl(snapshot) {
+  if (!snapshot?.selector) {
+    return
+  }
+
+  const control = appRoot.querySelector(snapshot.selector)
+
+  if (!isFormControl(control)) {
+    return
+  }
+
+  control.focus({ preventScroll: true })
+
+  if (
+    snapshot.selectionStart === null ||
+    snapshot.selectionEnd === null ||
+    !(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)
+  ) {
+    return
+  }
+
+  try {
+    control.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd, snapshot.selectionDirection ?? undefined)
+  } catch {
+    // Controls like number/date inputs do not support selection ranges.
+  }
+}
+
+function render(options = {}) {
+  const { preserveFocus = false, preservePageScroll = false } = options
+  const focusSnapshot = preserveFocus ? captureFocusedControl() : null
+  const scrollX = preservePageScroll ? window.scrollX : 0
+  const scrollY = preservePageScroll ? window.scrollY : 0
+
   syncFormValues()
 
   appRoot.innerHTML = `
@@ -329,17 +423,22 @@ function render() {
   `
 
   scheduleUpdateWireLayer()
+
+  if (!focusSnapshot && !preservePageScroll) {
+    return
+  }
+
+  window.requestAnimationFrame(() => {
+    if (preservePageScroll) {
+      window.scrollTo(scrollX, scrollY)
+    }
+
+    restoreFocusedControl(focusSnapshot)
+  })
 }
 
 function renderPreservingPageScroll() {
-  const scrollX = window.scrollX
-  const scrollY = window.scrollY
-
-  render()
-
-  window.requestAnimationFrame(() => {
-    window.scrollTo(scrollX, scrollY)
-  })
+  render({ preserveFocus: true, preservePageScroll: true })
 }
 
 function renderIcon(iconName) {
@@ -1358,7 +1457,7 @@ async function persistProfiles(options = {}) {
       return true
     }
 
-    render()
+    render({ preserveFocus: true })
     return true
   } catch {
     setStatus('Unable to save server profiles locally.', 'error')
@@ -1369,18 +1468,18 @@ async function persistProfiles(options = {}) {
 function queueProfileSave() {
   window.clearTimeout(profileSaveTimer)
   profileSaveTimer = window.setTimeout(() => {
-    void persistProfiles({ announce: true, successMessage: 'Saved server profile changes locally.' })
+    void persistProfiles()
   }, PROFILE_SAVE_DELAY_MS)
 }
 
 function setStatus(value, tone = 'neutral', tabId = state.activeTab) {
   state.statusByTab[tabId] = { tone, value }
-  render()
+  render({ preserveFocus: true })
 }
 
 function clearStatus(tabId = state.activeTab) {
   state.statusByTab[tabId] = { tone: 'neutral', value: '' }
-  render()
+  render({ preserveFocus: true })
 }
 
 function scheduleUpdateWireLayer() {
@@ -1860,7 +1959,7 @@ function mutateControl(target, eventType = 'input') {
       }
 
       if (target instanceof HTMLSelectElement || eventType === 'change') {
-        render()
+        render({ preserveFocus: true })
       }
     }
 
@@ -1886,7 +1985,7 @@ function mutateControl(target, eventType = 'input') {
         state.formValues[field.id] = field.type === 'boolean' ? field.defaultValue === 'true' : field.defaultValue
       }
 
-      render()
+      render({ preserveFocus: true })
     }
 
     return
@@ -1916,7 +2015,7 @@ function mutateControl(target, eventType = 'input') {
       endNode.columnsText = target.value
 
       if (eventType === 'change') {
-        render()
+        render({ preserveFocus: true })
       }
     }
 
