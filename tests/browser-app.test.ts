@@ -173,7 +173,7 @@ describe('browser app editor behavior', () => {
     }
   });
 
-  it('does not replace the start-field default-value input while typing numeric values', async () => {
+  it('does not replace the start-field default-value input during cold numeric entry', async () => {
     const app = await createBrowserApp();
 
     try {
@@ -200,7 +200,15 @@ describe('browser app editor behavior', () => {
       expect(defaultValueInput).not.toBeNull();
 
       defaultValueInput!.focus();
-      dispatchInput(app.window, defaultValueInput as HTMLInputElement, '94');
+      dispatchInput(app.window, defaultValueInput as HTMLInputElement, '4');
+      await waitForBrowserPaint(app.window);
+
+      const sameDefaultValueInput = app.document.querySelector(
+        '[data-start-field-field="defaultValue"]'
+      ) as HTMLInputElement | null;
+      expect(sameDefaultValueInput).toBe(defaultValueInput);
+
+      dispatchInput(app.window, defaultValueInput as HTMLInputElement, '49');
       await waitForBrowserPaint(app.window);
 
       const activeElement = app.document.activeElement as HTMLInputElement | null;
@@ -210,7 +218,26 @@ describe('browser app editor behavior', () => {
 
       expect(activeElement).toBe(defaultValueInput);
       expect(currentDefaultValueInput).toBe(defaultValueInput);
-      expect(currentDefaultValueInput?.value).toBe('94');
+      expect(currentDefaultValueInput?.value).toBe('49');
+    } finally {
+      app.cleanup();
+    }
+  });
+
+  it('does not render query-builder status banners after query actions', async () => {
+    const app = await createBrowserApp();
+
+    try {
+      const queryBuilderButton = app.document.querySelector('[data-action="switch-tab"][data-tab="query-builder"]');
+      expect(queryBuilderButton).not.toBeNull();
+      clickElement(app.window, queryBuilderButton as Element);
+
+      const addFieldButton = app.document.querySelector('[data-action="add-start-field"]');
+      expect(addFieldButton).not.toBeNull();
+      clickElement(app.window, addFieldButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      expect(app.document.querySelector('.status-banner')).toBeNull();
     } finally {
       app.cleanup();
     }

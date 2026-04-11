@@ -616,7 +616,6 @@ function renderQueryBuilderView() {
           <p>Wire API calls into usable outputs.</p>
         </div>
       </header>
-      ${renderStatusBanner('query-builder')}
       <div class="view-tabs" role="tablist" aria-label="Query views">
         ${renderViewTab('nodes', 'nodes', 'Node View', 'Arrange nodes and connections on the workspace.')}
         ${renderViewTab('output', 'output', 'Output View', 'Inspect start-field inputs and end-node output.')}
@@ -788,7 +787,7 @@ function renderStartField(field) {
             </label>
             ${renderStartFieldValueEditor(field)}
           </div>
-          ${readyToConnect ? renderFieldConnector(field.id, fieldLabel) : ''}
+          ${renderFieldConnector(field.id, fieldLabel, readyToConnect)}
         </div>
       </div>
     </div>
@@ -811,10 +810,10 @@ function getStartFieldReadiness(field) {
   return isStartFieldReady(field)
 }
 
-function renderFieldConnector(fieldId, fieldLabel) {
+function renderFieldConnector(fieldId, fieldLabel, isReady) {
   return `
     <span
-      class="field-connector"
+      class="field-connector${isReady ? '' : ' is-disabled'}"
       data-direction="output"
       data-node-id="start"
       data-handle-key="${fieldId}"
@@ -1483,12 +1482,12 @@ function queueProfileSave() {
 
 function setStatus(value, tone = 'neutral', tabId = state.activeTab) {
   state.statusByTab[tabId] = { tone, value }
-  render({ preserveFocus: true })
+  render({ preserveFocus: true, preservePageScroll: true })
 }
 
 function clearStatus(tabId = state.activeTab) {
   state.statusByTab[tabId] = { tone: 'neutral', value: '' }
-  render({ preserveFocus: true })
+  render({ preserveFocus: true, preservePageScroll: true })
 }
 
 function scheduleUpdateWireLayer() {
@@ -1983,7 +1982,6 @@ function mutateControl(target, eventType = 'input') {
     const field = startNode?.fields.find((item) => item.id === startFieldId)
 
     if (field && startNode) {
-      const previousReady = getStartFieldReadiness(field)
       const nextValue = startFieldField === 'name' ? sanitizeSafeName(target.value) : target.value
 
       field[startFieldField] = nextValue
@@ -2002,10 +2000,16 @@ function mutateControl(target, eventType = 'input') {
       }
 
       const nextReady = getStartFieldReadiness(field)
-      const shouldRender =
-        startFieldField === 'name' ||
-        startFieldField === 'type' ||
-        previousReady !== nextReady
+      const shouldRender = startFieldField === 'name' || startFieldField === 'type'
+
+      if (startFieldField === 'defaultValue') {
+        const fieldRow = target.closest('.field-row')
+        const connector = fieldRow?.querySelector('.field-connector')
+
+        if (connector instanceof HTMLElement) {
+          connector.classList.toggle('is-disabled', !nextReady)
+        }
+      }
 
       if (shouldRender) {
         render({ preserveFocus: true })

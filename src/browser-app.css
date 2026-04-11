@@ -805,6 +805,11 @@ pre {
   user-select: none;
 }
 
+.field-connector.is-disabled {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .field-connector:hover {
   color: var(--accent-strong);
 }
