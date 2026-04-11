@@ -655,7 +655,7 @@ pre {
 
 .field-row {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 9rem) minmax(0, 1fr);
+  grid-template-columns: minmax(9.5rem, 11rem) minmax(0, 1fr);
   gap: 0.8rem;
   align-items: start;
 }
@@ -672,9 +672,9 @@ pre {
 }
 
 .field-actions {
-  display: grid;
-  justify-items: start;
-  align-content: start;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.45rem;
 }
 
@@ -697,8 +697,9 @@ pre {
 .field-icon-actions {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.45rem;
+  margin-left: auto;
 }
 
 .field-grid {
@@ -708,14 +709,21 @@ pre {
 
 .field-grid .control-group {
   display: grid;
-  grid-template-columns: 5.6rem minmax(0, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.7rem;
   align-items: center;
+  width: 100%;
 }
 
 .field-grid .control-group span {
   font-size: 0.78rem;
   line-height: 1.1;
+  justify-self: start;
+}
+
+.field-grid .control-group input,
+.field-grid .control-group select {
+  width: 100%;
 }
 
 .field-connector {
@@ -921,5 +929,13 @@ pre {
 
   .field-editor-layout {
     grid-template-columns: 1fr;
+  }
+
+  .field-actions {
+    justify-content: flex-start;
+  }
+
+  .field-icon-actions {
+    margin-left: 0;
   }
 }
