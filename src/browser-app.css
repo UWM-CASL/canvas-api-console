@@ -560,8 +560,9 @@ pre {
 .node {
   position: absolute;
   width: 22rem;
-  padding: 0.8rem;
+  padding: 0;
   cursor: default;
+  overflow: hidden;
 }
 
 .node[data-node-type='start'],
@@ -570,12 +571,23 @@ pre {
 }
 
 .node-header {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #f7f9fc 0%, #eef2f6 100%);
   cursor: grab;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
 }
 
 .node-header:active {
   cursor: grabbing;
+}
+
+.node-header h3 {
+  font-size: 1.02rem;
+}
+
+.node-body {
+  padding: 0.8rem;
 }
 
 .wire-layer {
@@ -603,13 +615,13 @@ pre {
 }
 
 .control-group span {
-  font-size: 0.88rem;
+  font-size: 0.8rem;
 }
 
 .field-editor input,
 .field-editor select {
-  padding: 0.34rem 0.48rem;
-  font-size: 0.94rem;
+  padding: 0.28rem 0.42rem;
+  font-size: 0.88rem;
 }
 
 .node-grid {
@@ -656,11 +668,18 @@ pre {
   gap: 0.5rem;
 }
 
+.field-actions {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 0.35rem;
+}
+
 .field-editor-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.6rem;
-  align-items: center;
+  align-items: end;
 }
 
 .field-summary {
@@ -668,8 +687,8 @@ pre {
 }
 
 .field-summary strong {
-  font-size: 0.94rem;
-  line-height: 1.2;
+  font-size: 0.88rem;
+  line-height: 1.15;
 }
 
 .field-icon-actions {
@@ -683,6 +702,10 @@ pre {
 .field-grid {
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   align-items: end;
+}
+
+.field-grid .control-group {
+  gap: 0.24rem;
 }
 
 .field-connector {
