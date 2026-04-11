@@ -126,7 +126,13 @@ pre {
   border-radius: 1rem;
   background: transparent;
   color: #334e68;
+  cursor: pointer;
   text-align: center;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease;
 }
 
 .nav-button:hover {
@@ -182,9 +188,7 @@ pre {
 .server-card,
 .toolbar,
 .field-card,
-.empty-state,
-.about-panel,
-.about-card {
+.empty-state {
   border: 1px solid #d9e2ec;
   border-radius: 1rem;
   background: #ffffff;
@@ -194,9 +198,7 @@ pre {
 .panel,
 .output-card,
 .server-card,
-.empty-state,
-.about-panel,
-.about-card {
+.empty-state {
   padding: 0.95rem;
 }
 
@@ -258,9 +260,7 @@ pre {
 .section-header p,
 .output-card p,
 .server-card p,
-.empty-state p,
-.about-panel p,
-.about-card p {
+.empty-state p {
   margin: 0.3rem 0 0;
 }
 
@@ -285,7 +285,7 @@ pre {
 .field-list,
 .output-layout,
 .about-grid,
-.about-copy {
+.about-intro {
   display: grid;
   gap: 0.75rem;
 }
@@ -294,12 +294,35 @@ pre {
   gap: 1rem;
 }
 
-.about-panel {
-  gap: 1rem;
-}
-
 .about-grid {
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.25rem;
+}
+
+.about-section {
+  display: grid;
+  gap: 1.5rem;
+  padding: 0.25rem 1.1rem 0;
+}
+
+.about-intro {
+  max-width: 72rem;
+}
+
+.about-section h2,
+.about-item h3 {
+  margin: 0;
+}
+
+.about-section p,
+.about-item p {
+  margin: 0;
+}
+
+.about-item {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
 }
 
 .helper-banner,

@@ -91,6 +91,7 @@ const state = createInitialState()
 let dragState = null
 let panState = null
 let profileSaveTimer = null
+let pendingWireLayerFrame = null
 let wireDraft = null
 
 function createInitialState() {
@@ -279,7 +280,7 @@ function render() {
     </div>
   `
 
-  updateWireLayer()
+  scheduleUpdateWireLayer()
 }
 
 function renderIcon(iconName) {
@@ -331,21 +332,21 @@ function renderAboutView() {
         </div>
       </header>
       ${renderStatusBanner()}
-      <section class="about-panel">
-        <div class="about-copy">
-          <h2>Work locally, keep credentials local</h2>
+      <section class="about-section" aria-labelledby="about-local-heading">
+        <div class="about-intro">
+          <h2 id="about-local-heading">Work locally, keep credentials local</h2>
           <p>The app keeps Canvas profile metadata on your device and stores bearer tokens in the OS keychain through Node.js. Use Server Profiles to define environments, then use Query Builder to test requests without pushing credentials into files, screenshots, or third-party services.</p>
         </div>
         <div class="about-grid">
-          <section class="about-card">
+          <section class="about-item">
             <h3>About</h3>
             <p>This first tab is the overview: what the app is for, how credentials are handled, and where to start.</p>
           </section>
-          <section class="about-card">
+          <section class="about-item">
             <h3>Server Profiles</h3>
             <p>The second tab is a list of Canvas environments. Add a host, enter a token, and the token is saved to the device keychain instead of a plaintext file.</p>
           </section>
-          <section class="about-card">
+          <section class="about-item">
             <h3>Query Builder</h3>
             <p>Build and test request graphs after profiles are in place. Start and output nodes stay in the same workspace, with saved profiles available to each API node.</p>
           </section>
@@ -1170,6 +1171,17 @@ function setStatus(value, tone = 'neutral') {
   render()
 }
 
+function scheduleUpdateWireLayer() {
+  if (pendingWireLayerFrame !== null) {
+    return
+  }
+
+  pendingWireLayerFrame = window.requestAnimationFrame(() => {
+    pendingWireLayerFrame = null
+    updateWireLayer()
+  })
+}
+
 function updateNodeElementPosition(nodeId) {
   const node = getNode(nodeId)
   const nodeElement = appRoot.querySelector(`[data-node-id="${nodeId}"]`)
@@ -1610,7 +1622,6 @@ function mutateControl(target, eventType = 'input') {
       profile[profileField] = target.value
       if (profileField === 'token') {
         profile.tokenDirty = true
-        render()
 
         if (eventType === 'change') {
           queueProfileSave()
@@ -1618,7 +1629,6 @@ function mutateControl(target, eventType = 'input') {
 
         return
       }
-      render()
       queueProfileSave()
     }
 
@@ -1636,7 +1646,10 @@ function mutateControl(target, eventType = 'input') {
       if (nodeField === 'profileId') {
         node.lastTest = null
       }
-      render()
+
+      if (target instanceof HTMLSelectElement || eventType === 'change') {
+        render()
+      }
     }
 
     return
@@ -1695,7 +1708,6 @@ function mutateControl(target, eventType = 'input') {
 
       if (param) {
         param[paramField] = target.value
-        render()
       }
     }
 
@@ -1707,7 +1719,10 @@ function mutateControl(target, eventType = 'input') {
 
     if (endNode) {
       endNode.columnsText = target.value
-      render()
+
+      if (eventType === 'change') {
+        render()
+      }
     }
 
     return
@@ -2080,14 +2095,14 @@ document.addEventListener('pointerup', (event) => {
 })
 
 window.addEventListener('resize', () => {
-  updateWireLayer()
+  scheduleUpdateWireLayer()
 })
 
 appRoot.addEventListener('scroll', (event) => {
   const target = event.target
 
   if (target instanceof HTMLElement && target.id === 'node-space') {
-    updateWireLayer()
+    scheduleUpdateWireLayer()
   }
 }, true)
 
