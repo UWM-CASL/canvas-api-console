@@ -10,9 +10,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function createJsonResponse(payload: unknown) {
+function createJsonResponse(payload: unknown, ok = true) {
   return {
-    ok: true,
+    ok,
     json: async () => payload
   };
 }
@@ -131,7 +131,7 @@ describe('browser app editor behavior', () => {
     }
   });
 
-  it('autosaves profile edits without showing a success banner while the user types', async () => {
+  it('saves profile edits only when the explicit save action is used', async () => {
     const app = await createBrowserApp({
       initialProfiles: [
         {
@@ -155,19 +155,124 @@ describe('browser app editor behavior', () => {
 
       profileNameInput?.focus();
       dispatchInput(app.window, profileNameInput as HTMLInputElement, 'uwm-prod');
-      await new Promise((resolveSave) => app.window.setTimeout(resolveSave, 375));
+      await waitForBrowserPaint(app.window);
+
+      expect(
+        app.fetchMock.mock.calls.some((call) => {
+          const input = typeof call[0] === 'string' ? call[0] : String(call[0]);
+          return input.endsWith('/api/profiles') && call[1]?.method === 'PUT';
+        })
+      ).toBe(false);
+
+      const saveProfileButton = app.document.querySelector(
+        '[data-action="save-profile"][data-profile-id="profile-1"]'
+      );
+      expect(saveProfileButton).not.toBeNull();
+      clickElement(app.window, saveProfileButton as Element);
       await waitForBrowserPaint(app.window);
 
       const activeElement = app.document.activeElement as HTMLInputElement | null;
       expect(activeElement?.dataset.profileField).toBe('name');
       expect(activeElement?.value).toBe('uwm-prod');
-      expect(app.document.querySelector('.status-banner')).toBeNull();
+      expect(app.document.querySelector('.status-banner')?.textContent).toContain('Saved server profile locally.');
       expect(
         app.fetchMock.mock.calls.some((call) => {
           const input = typeof call[0] === 'string' ? call[0] : String(call[0]);
           return input.endsWith('/api/profiles') && call[1]?.method === 'PUT';
         })
       ).toBe(true);
+    } finally {
+      app.cleanup();
+    }
+  });
+
+  it('keeps a new profile as a local draft until it has a valid HTTPS host', async () => {
+    const app = await createBrowserApp();
+
+    try {
+      const serversButton = app.document.querySelector('[data-action="switch-tab"][data-tab="servers"]');
+      expect(serversButton).not.toBeNull();
+      clickElement(app.window, serversButton as Element);
+
+      const addProfileButton = app.document.querySelector('[data-action="add-profile"]');
+      expect(addProfileButton).not.toBeNull();
+      clickElement(app.window, addProfileButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      expect(app.document.querySelector('[data-profile-id="profile-1"]')).not.toBeNull();
+      expect(app.document.querySelector('.status-banner')?.textContent).toContain(
+        'New profile added. Enter an HTTPS Canvas host to save it locally.'
+      );
+      expect(
+        app.fetchMock.mock.calls.some((call) => {
+          const input = typeof call[0] === 'string' ? call[0] : String(call[0]);
+          return input.endsWith('/api/profiles') && call[1]?.method === 'PUT';
+        })
+      ).toBe(false);
+    } finally {
+      app.cleanup();
+    }
+  });
+
+  it('does not save invalid profile hosts and saves once the host is valid', async () => {
+    const app = await createBrowserApp();
+
+    try {
+      const serversButton = app.document.querySelector('[data-action="switch-tab"][data-tab="servers"]');
+      expect(serversButton).not.toBeNull();
+      clickElement(app.window, serversButton as Element);
+
+      const addProfileButton = app.document.querySelector('[data-action="add-profile"]');
+      expect(addProfileButton).not.toBeNull();
+      clickElement(app.window, addProfileButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      const hostInput = app.document.querySelector(
+        '[data-profile-id="profile-1"][data-profile-field="host"]'
+      ) as HTMLInputElement | null;
+      expect(hostInput).not.toBeNull();
+
+      dispatchInput(app.window, hostInput as HTMLInputElement, 'canvas.example.edu');
+      await waitForBrowserPaint(app.window);
+
+      const saveProfileButton = app.document.querySelector(
+        '[data-action="save-profile"][data-profile-id="profile-1"]'
+      );
+      expect(saveProfileButton).not.toBeNull();
+      clickElement(app.window, saveProfileButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      expect(app.document.querySelector('.status-banner')?.textContent).toContain(
+        'Canvas host for Server 1 must be a valid HTTPS URL.'
+      );
+      expect(
+        app.fetchMock.mock.calls.some((call) => {
+          const input = typeof call[0] === 'string' ? call[0] : String(call[0]);
+          return input.endsWith('/api/profiles') && call[1]?.method === 'PUT';
+        })
+      ).toBe(false);
+
+      const refreshedHostInput = app.document.querySelector(
+        '[data-profile-id="profile-1"][data-profile-field="host"]'
+      ) as HTMLInputElement | null;
+      expect(refreshedHostInput).not.toBeNull();
+
+      dispatchInput(app.window, refreshedHostInput as HTMLInputElement, 'https://canvas.example.edu');
+      await waitForBrowserPaint(app.window);
+      const refreshedSaveProfileButton = app.document.querySelector(
+        '[data-action="save-profile"][data-profile-id="profile-1"]'
+      );
+      expect(refreshedSaveProfileButton).not.toBeNull();
+      clickElement(app.window, refreshedSaveProfileButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      expect(
+        app.fetchMock.mock.calls.some((call) => {
+          const input = typeof call[0] === 'string' ? call[0] : String(call[0]);
+          return input.endsWith('/api/profiles') && call[1]?.method === 'PUT';
+        })
+      ).toBe(true);
+      expect(app.document.querySelector('.status-banner')?.textContent).toContain('Saved server profile locally.');
     } finally {
       app.cleanup();
     }

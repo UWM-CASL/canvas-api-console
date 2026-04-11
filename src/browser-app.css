@@ -486,6 +486,14 @@ pre {
   background: transparent;
 }
 
+.workspace-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -892,6 +900,12 @@ pre {
 .server-card-header {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
+}
+
+.server-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .server-card-body {

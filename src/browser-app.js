@@ -12,7 +12,6 @@ const API_NODE_FIELDS = ['endpoint', 'method', 'profileId']
 const START_FIELD_FIELDS = ['name', 'type', 'defaultValue']
 const PARAM_FIELDS = ['name', 'value']
 const SAFE_NAME_CHARACTER_PATTERN = /[^\p{L}\p{M}\p{N}_.\-[\]]+/gu
-const PROFILE_SAVE_DELAY_MS = 300
 const ICONS = {
   app: `
     <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -136,7 +135,6 @@ if (!(appRoot instanceof HTMLElement)) {
 const state = createInitialState()
 let dragState = null
 let panState = null
-let profileSaveTimer = null
 let pendingWireLayerFrame = null
 let wireDraft = null
 
@@ -255,6 +253,46 @@ function createStartField() {
     type: 'text',
     visible: true
   }
+}
+
+function getProfileDraftLabel(profile) {
+  return profile.name.trim() || profile.id
+}
+
+function getProfileDraftValidationMessage(profile) {
+  if (!profile.name.trim()) {
+    return `Enter a profile name before saving ${getProfileDraftLabel(profile)} locally.`
+  }
+
+  if (!profile.host.trim()) {
+    return `Enter an HTTPS Canvas host before saving ${getProfileDraftLabel(profile)} locally.`
+  }
+
+  let url
+
+  try {
+    url = new URL(profile.host.trim())
+  } catch {
+    return `Canvas host for ${getProfileDraftLabel(profile)} must be a valid HTTPS URL.`
+  }
+
+  if (url.protocol !== 'https:') {
+    return `Canvas host for ${getProfileDraftLabel(profile)} must use HTTPS.`
+  }
+
+  return ''
+}
+
+function getProfilesDraftValidationMessage() {
+  for (const profile of state.profiles) {
+    const message = getProfileDraftValidationMessage(profile)
+
+    if (message) {
+      return message
+    }
+  }
+
+  return ''
 }
 
 function createQueryParameter() {
@@ -578,7 +616,10 @@ function renderProfileCard(profile) {
           <h3 id="${profile.id}-heading">${escapeHtml(profile.name || 'Untitled server')}</h3>
           <p>Host metadata is saved locally. Bearer tokens are kept in the device keychain.</p>
         </div>
-        <button class="ghost-button" type="button" data-action="remove-profile" data-profile-id="${profile.id}">Remove</button>
+        <div class="server-card-actions" aria-label="Profile actions">
+          ${renderIconActionButton('save-profile', profile.id, 'save', 'Save profile', 'Save this server profile locally.')}
+          ${renderIconActionButton('remove-profile', profile.id, 'trash', 'Remove profile', 'Remove this server profile from local storage.')}
+        </div>
       </div>
       <div class="server-card-body">
         <label class="control-group">
@@ -677,6 +718,16 @@ function renderNodeSpace() {
           <h3>Node workspace</h3>
           <p>Drag nodes to reposition them, drag blank grid space to pan, and drag from an output handle to an input handle to create a wire.</p>
         </div>
+        <a
+          class="secondary-button workspace-link-button"
+          href="https://developerdocs.instructure.com/services/canvas"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open the Canvas REST API documentation in a new tab."
+          title="Open the Canvas REST API documentation"
+        >
+          Canvas REST API
+        </a>
       </div>
       <div id="node-space" class="node-space">
         <svg id="wire-layer" class="wire-layer" aria-hidden="true"></svg>
@@ -725,6 +776,22 @@ function renderStartNode(node) {
         </div>
       </div>
     </section>
+  `
+}
+
+function renderIconActionButton(action, profileId, iconName, label, description) {
+  return `
+    <button
+      class="ghost-button icon-button"
+      type="button"
+      data-action="${action}"
+      data-profile-id="${profileId}"
+      aria-label="${escapeHtml(`${label}. ${description}`)}"
+      title="${escapeHtml(description)}"
+    >
+      <span class="icon-button-mark" aria-hidden="true">${renderIcon(iconName)}</span>
+      <span class="sr-only">${label}</span>
+    </button>
   `
 }
 
@@ -1435,6 +1502,12 @@ function buildProfileSaveRequest() {
 
 async function persistProfiles(options = {}) {
   const { announce = false, successMessage = 'Saved server profiles locally.' } = options
+  const validationMessage = getProfilesDraftValidationMessage()
+
+  if (validationMessage) {
+    setStatus(validationMessage, 'neutral')
+    return false
+  }
 
   try {
     const response = await fetch('/api/profiles', {
@@ -1444,9 +1517,13 @@ async function persistProfiles(options = {}) {
       },
       method: 'PUT'
     })
-    const payload = await response.json()
+    const payload = await response.json().catch(() => null)
 
-    if (!response.ok || !Array.isArray(payload.profiles)) {
+    if (!response.ok) {
+      throw new Error(typeof payload?.error === 'string' ? payload.error : 'Unable to save server profiles.')
+    }
+
+    if (!Array.isArray(payload?.profiles)) {
       throw new Error('Unable to save server profiles.')
     }
 
@@ -1465,19 +1542,13 @@ async function persistProfiles(options = {}) {
       return true
     }
 
+    state.statusByTab.servers = { tone: 'neutral', value: '' }
     render({ preserveFocus: true })
     return true
-  } catch {
-    setStatus('Unable to save server profiles locally.', 'error')
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Unable to save server profiles locally.', 'error')
     return false
   }
-}
-
-function queueProfileSave() {
-  window.clearTimeout(profileSaveTimer)
-  profileSaveTimer = window.setTimeout(() => {
-    void persistProfiles()
-  }, PROFILE_SAVE_DELAY_MS)
 }
 
 function setStatus(value, tone = 'neutral', tabId = state.activeTab) {
@@ -1941,14 +2012,7 @@ function mutateControl(target, eventType = 'input') {
       profile[profileField] = target.value
       if (profileField === 'token') {
         profile.tokenDirty = true
-
-        if (eventType === 'change') {
-          queueProfileSave()
-        }
-
-        return
       }
-      queueProfileSave()
     }
 
     return
@@ -2107,7 +2171,13 @@ function handleAction(target) {
     state.profiles.push(createProfile())
     state.activeTab = 'servers'
     render()
-    void persistProfiles()
+    setStatus('New profile added. Enter an HTTPS Canvas host to save it locally.', 'neutral')
+    return true
+  }
+
+  if (action === 'save-profile') {
+    state.activeTab = 'servers'
+    void persistProfiles({ announce: true, successMessage: 'Saved server profile locally.' })
     return true
   }
 
