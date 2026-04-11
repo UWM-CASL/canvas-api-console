@@ -11,6 +11,7 @@ const PROFILE_FIELDS = ['name', 'host', 'token']
 const API_NODE_FIELDS = ['endpoint', 'method', 'profileId']
 const START_FIELD_FIELDS = ['name', 'type', 'defaultValue']
 const PARAM_FIELDS = ['name', 'value']
+const SAFE_NAME_CHARACTER_PATTERN = /[^\p{L}\p{M}\p{N}_.\-[\]]+/gu
 const PROFILE_SAVE_DELAY_MS = 300
 const ICONS = {
   app: `
@@ -388,6 +389,10 @@ function restoreFocusedControl(snapshot) {
   }
 }
 
+function sanitizeSafeName(value) {
+  return value.replace(SAFE_NAME_CHARACTER_PATTERN, '')
+}
+
 function render(options = {}) {
   const { preserveFocus = false, preservePageScroll = false } = options
   const focusSnapshot = preserveFocus ? captureFocusedControl() : null
@@ -698,7 +703,7 @@ function renderStartNode(node) {
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="start" style="left: ${node.position.x}px; top: ${node.position.y}px;">
       <div class="node-header" data-drag-handle="true" data-node-id="${node.id}" tabindex="0" aria-label="Start node title bar">
-        <div>
+        <div class="node-header-label">
           <h3>Start</h3>
         </div>
         <button
@@ -802,6 +807,10 @@ function isStartFieldReady(field) {
   return field.defaultValue.trim() !== ''
 }
 
+function getStartFieldReadiness(field) {
+  return isStartFieldReady(field)
+}
+
 function renderFieldConnector(fieldId, fieldLabel) {
   return `
     <span
@@ -865,7 +874,7 @@ function renderApiNode(node) {
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="api" style="left: ${node.position.x}px; top: ${node.position.y}px;">
       <div class="node-header" data-drag-handle="true" data-node-id="${node.id}" tabindex="0" aria-label="${escapeHtml(`${node.endpoint || 'API node'} title bar`)}">
-        <div>
+        <div class="node-header-label">
           <h3>${escapeHtml(node.endpoint || 'API node')}</h3>
         </div>
         <div class="node-actions">
@@ -1056,7 +1065,7 @@ function renderEndNode(node) {
   return `
     <section class="node" data-node-id="${node.id}" data-node-type="end" style="left: ${node.position.x}px; top: ${node.position.y}px;">
       <div class="node-header" data-drag-handle="true" data-node-id="${node.id}" tabindex="0" aria-label="End node title bar">
-        <div>
+        <div class="node-header-label">
           <h3>End</h3>
         </div>
         ${renderInputHandle(node.id, 'input', 'Connect a tested output into the end node')}
@@ -1974,7 +1983,14 @@ function mutateControl(target, eventType = 'input') {
     const field = startNode?.fields.find((item) => item.id === startFieldId)
 
     if (field && startNode) {
-      field[startFieldField] = target.value
+      const previousReady = getStartFieldReadiness(field)
+      const nextValue = startFieldField === 'name' ? sanitizeSafeName(target.value) : target.value
+
+      field[startFieldField] = nextValue
+
+      if (target.value !== nextValue) {
+        target.value = nextValue
+      }
 
       if (startFieldField === 'type') {
         field.defaultValue = field.type === 'boolean' ? 'false' : ''
@@ -1985,7 +2001,15 @@ function mutateControl(target, eventType = 'input') {
         state.formValues[field.id] = field.type === 'boolean' ? field.defaultValue === 'true' : field.defaultValue
       }
 
-      render({ preserveFocus: true })
+      const nextReady = getStartFieldReadiness(field)
+      const shouldRender =
+        startFieldField === 'name' ||
+        startFieldField === 'type' ||
+        previousReady !== nextReady
+
+      if (shouldRender) {
+        render({ preserveFocus: true })
+      }
     }
 
     return
@@ -2001,7 +2025,16 @@ function mutateControl(target, eventType = 'input') {
       const param = node.params.find((item) => item.id === paramId)
 
       if (param) {
-        param[paramField] = target.value
+        const nextValue = paramField === 'name' ? sanitizeSafeName(target.value) : target.value
+        param[paramField] = nextValue
+
+        if (target.value !== nextValue) {
+          target.value = nextValue
+        }
+
+        if (paramField === 'name') {
+          render({ preserveFocus: true })
+        }
       }
     }
 

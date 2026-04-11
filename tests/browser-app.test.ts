@@ -172,4 +172,89 @@ describe('browser app editor behavior', () => {
       app.cleanup();
     }
   });
+
+  it('does not replace the start-field default-value input while typing numeric values', async () => {
+    const app = await createBrowserApp();
+
+    try {
+      const queryBuilderButton = app.document.querySelector('[data-action="switch-tab"][data-tab="query-builder"]');
+      expect(queryBuilderButton).not.toBeNull();
+      clickElement(app.window, queryBuilderButton as Element);
+
+      const addFieldButton = app.document.querySelector('[data-action="add-start-field"]');
+      expect(addFieldButton).not.toBeNull();
+      clickElement(app.window, addFieldButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      const typeSelect = app.document.querySelector(
+        '[data-start-field-field="type"]'
+      ) as HTMLSelectElement | null;
+      expect(typeSelect).not.toBeNull();
+      typeSelect!.value = 'integer';
+      typeSelect!.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+      await waitForBrowserPaint(app.window);
+
+      const defaultValueInput = app.document.querySelector(
+        '[data-start-field-field="defaultValue"]'
+      ) as HTMLInputElement | null;
+      expect(defaultValueInput).not.toBeNull();
+
+      defaultValueInput!.focus();
+      dispatchInput(app.window, defaultValueInput as HTMLInputElement, '94');
+      await waitForBrowserPaint(app.window);
+
+      const activeElement = app.document.activeElement as HTMLInputElement | null;
+      const currentDefaultValueInput = app.document.querySelector(
+        '[data-start-field-field="defaultValue"]'
+      ) as HTMLInputElement | null;
+
+      expect(activeElement).toBe(defaultValueInput);
+      expect(currentDefaultValueInput).toBe(defaultValueInput);
+      expect(currentDefaultValueInput?.value).toBe('94');
+    } finally {
+      app.cleanup();
+    }
+  });
+
+  it('filters unsupported characters from start-field and parameter names', async () => {
+    const app = await createBrowserApp();
+
+    try {
+      const queryBuilderButton = app.document.querySelector('[data-action="switch-tab"][data-tab="query-builder"]');
+      expect(queryBuilderButton).not.toBeNull();
+      clickElement(app.window, queryBuilderButton as Element);
+
+      const addFieldButton = app.document.querySelector('[data-action="add-start-field"]');
+      expect(addFieldButton).not.toBeNull();
+      clickElement(app.window, addFieldButton as Element);
+
+      const addNodeButton = app.document.querySelector('[data-action="add-api-node"]');
+      expect(addNodeButton).not.toBeNull();
+      clickElement(app.window, addNodeButton as Element);
+      await waitForBrowserPaint(app.window);
+
+      const startFieldNameInput = app.document.querySelector(
+        '[data-start-field-field="name"]'
+      ) as HTMLInputElement | null;
+      expect(startFieldNameInput).not.toBeNull();
+      dispatchInput(app.window, startFieldNameInput as HTMLInputElement, 'na me!é_Имя[]-.$');
+      await waitForBrowserPaint(app.window);
+
+      const paramNameInput = app.document.querySelector(
+        '[data-param-field="name"]'
+      ) as HTMLInputElement | null;
+      expect(paramNameInput).not.toBeNull();
+      dispatchInput(app.window, paramNameInput as HTMLInputElement, 'pa ram?Ö_имя[]-.&');
+      await waitForBrowserPaint(app.window);
+
+      expect((app.document.querySelector('[data-start-field-field="name"]') as HTMLInputElement | null)?.value).toBe(
+        'nameé_Имя[]-.'
+      );
+      expect((app.document.querySelector('[data-param-field="name"]') as HTMLInputElement | null)?.value).toBe(
+        'paramÖ_имя[]-.'
+      );
+    } finally {
+      app.cleanup();
+    }
+  });
 });
