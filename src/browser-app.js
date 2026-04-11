@@ -595,9 +595,6 @@ function renderServersView() {
         </div>
       </header>
       ${renderStatusBanner('servers')}
-      <div class="helper-banner">
-        Keep names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are saved to the OS keychain for local test calls and are never written into <code>.query.json</code> exports.
-      </div>
       <div class="toolbar">
         <div class="toolbar-group">
           ${renderToolbarButton('add-profile', 'add', 'Add Server Profile', 'Create a new saved Canvas environment on this device.', true)}
@@ -643,7 +640,6 @@ function renderProfileCard(profile) {
           ? `<button class="ghost-button" type="button" data-action="clear-profile-token" data-profile-id="${profile.id}">Clear saved token</button>`
           : ''}
       </div>
-      <div class="card-note">Query Builder nodes can select this profile when testing Canvas endpoints.</div>
     </section>
   `
 }
