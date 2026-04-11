@@ -655,8 +655,8 @@ pre {
 
 .field-row {
   display: grid;
-  grid-template-columns: minmax(9.5rem, 11rem) minmax(0, 1fr);
-  gap: 0.8rem;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
   align-items: start;
 }
 
@@ -668,14 +668,15 @@ pre {
 .field-summary,
 .field-editor {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .field-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.45rem;
+  width: 100%;
 }
 
 .field-editor-layout {
