@@ -297,6 +297,17 @@ function render() {
   scheduleUpdateWireLayer()
 }
 
+function renderPreservingPageScroll() {
+  const scrollX = window.scrollX
+  const scrollY = window.scrollY
+
+  render()
+
+  window.requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY)
+  })
+}
+
 function renderIcon(iconName) {
   return `<span class="icon-svg">${ICONS[iconName] ?? ''}</span>`
 }
@@ -356,7 +367,6 @@ function renderAboutView() {
     <section class="content-grid">
       <header class="hero-panel">
         <div class="hero-copy">
-          <p class="eyebrow">About</p>
           <h1>Canvas API Console</h1>
           <p>Local-first Canvas API tooling for authorized administrators who need inspectable requests, reusable workflows, and local-only credential handling.</p>
         </div>
@@ -390,7 +400,7 @@ function renderServersView() {
   const profileList = state.profiles.length > 0
     ? `
       <div class="profile-list" role="list" aria-label="Server profile list">
-        ${state.profiles.map((profile, index) => renderProfileCard(profile, index)).join('')}
+        ${state.profiles.map((profile) => renderProfileCard(profile)).join('')}
       </div>
     `
     : `
@@ -404,29 +414,29 @@ function renderServersView() {
     <section class="content-grid">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Server Profiles</p>
-          <h2>Saved Canvas environments</h2>
-          <p>Keep an explicit list of Canvas servers on this device. Each profile stores a host, while the bearer token is written to the OS keychain.</p>
-        </div>
-        <div class="inline-actions">
-          <button class="primary-button" type="button" data-action="add-profile">Add server profile</button>
+          <h2>Canvas environments</h2>
+          <p>Keep a list of Canvas servers on this device.</p>
         </div>
       </header>
       ${renderStatusBanner('servers')}
       <div class="helper-banner">
         Keep names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are saved to the OS keychain for local test calls and are never written into <code>.query.json</code> exports.
       </div>
+      <div class="toolbar">
+        <div class="toolbar-group">
+          ${renderToolbarButton('add-profile', 'add', 'Add Server Profile', 'Create a new saved Canvas environment on this device.', true)}
+        </div>
+      </div>
       ${profileList}
     </section>
   `
 }
 
-function renderProfileCard(profile, index) {
+function renderProfileCard(profile) {
   return `
     <section class="server-card" role="listitem" aria-labelledby="${profile.id}-heading">
       <div class="server-card-header">
         <div>
-          <p class="server-index">Profile ${index + 1}</p>
           <h3 id="${profile.id}-heading">${escapeHtml(profile.name || 'Untitled server')}</h3>
           <p>Host metadata is saved locally. Bearer tokens are kept in the device keychain.</p>
         </div>
@@ -465,7 +475,7 @@ function renderQueryBuilderView() {
       <header class="page-header">
         <div>
           <h2>Query Builder</h2>
-          <p>Wire start-field inputs into testable API nodes, then pipe a tested result into the end node output view.</p>
+          <p>Wire API calls into usable outputs.</p>
         </div>
       </header>
       ${renderStatusBanner('query-builder')}
@@ -474,7 +484,7 @@ function renderQueryBuilderView() {
         ${renderViewTab('output', 'output', 'Output View', 'Inspect start-field inputs and end-node output.')}
       </div>
       <div class="toolbar">
-        <div class="toolbar-group">
+        <div class="toolbar-group toolbar-group-uniform">
           ${renderToolbarButton('add-api-node', 'add', 'Add API Node', 'Create a new API node in the workspace.', true)}
           ${renderToolbarButton('save-query', 'save', 'Save', 'Save the current wireframe as a .query.json file.')}
           ${renderToolbarButton('load-query', 'open', 'Open', 'Open a saved .query.json wireframe from disk.')}
@@ -556,7 +566,6 @@ function renderStartNode(node) {
     <section class="node" data-node-id="${node.id}" data-node-type="start" style="left: ${node.position.x}px; top: ${node.position.y}px;">
       <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
         <div>
-          <div class="node-tag">Start</div>
           <h3>Start node</h3>
         </div>
         <span class="muted">Form inputs</span>
@@ -646,7 +655,6 @@ function renderApiNode(node) {
     <section class="node" data-node-id="${node.id}" data-node-type="api" style="left: ${node.position.x}px; top: ${node.position.y}px;">
       <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
         <div>
-          <div class="node-tag">Query</div>
           <h3>${escapeHtml(node.endpoint || 'API node')}</h3>
         </div>
         <div class="node-actions">
@@ -760,7 +768,6 @@ function renderEndNode(node) {
     <section class="node" data-node-id="${node.id}" data-node-type="end" style="left: ${node.position.x}px; top: ${node.position.y}px;">
       <div class="node-header" data-drag-handle="true" data-node-id="${node.id}">
         <div>
-          <div class="node-tag">End</div>
           <h3>Output node</h3>
         </div>
         ${renderInputHandle(node.id, 'input', 'Connect a tested output into the end node')}
@@ -809,7 +816,6 @@ function renderOutputView() {
             <h3>End node output</h3>
             <p>Data from the wire connected into the end node appears below.</p>
           </div>
-          <span class="badge">${escapeHtml(endNode.columnsText || 'Auto columns')}</span>
         </div>
         ${endValue.available
           ? renderResolvedOutput(endValue.value, endNode.columnsText)
@@ -1844,7 +1850,7 @@ function handleAction(target) {
 
   if (action === 'set-query-view') {
     state.queryView = actionTarget.dataset.queryView
-    render()
+    renderPreservingPageScroll()
     return true
   }
 
