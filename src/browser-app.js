@@ -6,6 +6,19 @@ const START_FIELD_FIELDS = ['name', 'type', 'defaultValue', 'optionsText']
 const PARAM_FIELDS = ['name', 'value']
 const PROFILE_SAVE_DELAY_MS = 300
 const ICONS = {
+  app: `
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="24"></circle>
+      <circle cx="32" cy="14.5" r="3.5"></circle>
+      <circle cx="49.5" cy="32" r="3.5"></circle>
+      <circle cx="32" cy="49.5" r="3.5"></circle>
+      <circle cx="14.5" cy="32" r="3.5"></circle>
+      <circle cx="44.5" cy="19.5" r="3"></circle>
+      <circle cx="44.5" cy="44.5" r="3"></circle>
+      <circle cx="19.5" cy="44.5" r="3"></circle>
+      <circle cx="19.5" cy="19.5" r="3"></circle>
+    </svg>
+  `,
   about: `
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9"></circle>
@@ -243,9 +256,16 @@ function render() {
   appRoot.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar">
+        <div class="app-brand" aria-label="Canvas API Console">
+          <div class="app-brand-icon" aria-hidden="true">${renderIcon('app')}</div>
+          <div class="app-brand-copy">
+            <strong>Canvas API Console</strong>
+            <span>Canvas LMS Admin</span>
+          </div>
+        </div>
         <nav class="nav-list" aria-label="Primary">
           ${renderNavButton('about', 'about', 'About', 'Overview of the local Canvas API Console.')}
-          ${renderNavButton('servers', 'servers', 'Servers', 'Manage Canvas hosts and device-keychain bearer tokens.')}
+          ${renderNavButton('servers', 'servers', 'Server Profiles', 'Manage Canvas hosts and device-keychain bearer tokens.')}
           ${renderNavButton('query-builder', 'queryBuilder', 'Query Builder', 'Design the node graph and preview output wiring.')}
         </nav>
       </aside>
@@ -303,30 +323,31 @@ function renderStatusBanner() {
 function renderAboutView() {
   return `
     <section class="content-grid">
-      <header class="page-header">
-        <div>
+      <header class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">About</p>
           <h1>Canvas API Console</h1>
-          <p>Local-first Canvas request tooling for authorized administrators.</p>
+          <p>Local-first Canvas API tooling for authorized administrators who need inspectable requests, reusable workflows, and local-only credential handling.</p>
         </div>
       </header>
       ${renderStatusBanner()}
       <section class="about-panel">
         <div class="about-copy">
-          <h2>Inspectable Canvas workflows, kept on your own device</h2>
-          <p>Use the Servers tab to save Canvas environments locally, with bearer tokens stored in the OS keychain through Node.js. Use Query Builder to shape reusable request graphs, test nodes, and inspect output without sending credentials to any third-party service.</p>
+          <h2>Work locally, keep credentials local</h2>
+          <p>The app keeps Canvas profile metadata on your device and stores bearer tokens in the OS keychain through Node.js. Use Server Profiles to define environments, then use Query Builder to test requests without pushing credentials into files, screenshots, or third-party services.</p>
         </div>
         <div class="about-grid">
           <section class="about-card">
-            <h3>Servers</h3>
-            <p>Profiles keep host metadata on disk and token secrets in the device keychain so they survive reloads without being exported.</p>
+            <h3>About</h3>
+            <p>This first tab is the overview: what the app is for, how credentials are handled, and where to start.</p>
+          </section>
+          <section class="about-card">
+            <h3>Server Profiles</h3>
+            <p>The second tab is a list of Canvas environments. Add a host, enter a token, and the token is saved to the device keychain instead of a plaintext file.</p>
           </section>
           <section class="about-card">
             <h3>Query Builder</h3>
-            <p>Arrange start, API, and output nodes on a draggable workspace, wire tested values between them, and pan the canvas as diagrams grow.</p>
-          </section>
-          <section class="about-card">
-            <h3>Output View</h3>
-            <p>Preview start-field inputs and end-node results from the same top tab strip used for node layout.</p>
+            <p>Build and test request graphs after profiles are in place. Start and output nodes stay in the same workspace, with saved profiles available to each API node.</p>
           </section>
         </div>
       </section>
@@ -335,12 +356,16 @@ function renderAboutView() {
 }
 
 function renderServersView() {
-  const serverCards = state.profiles.length > 0
-    ? `<div class="server-grid">${state.profiles.map((profile) => renderProfileCard(profile)).join('')}</div>`
+  const profileList = state.profiles.length > 0
+    ? `
+      <div class="profile-list" role="list" aria-label="Server profile list">
+        ${state.profiles.map((profile, index) => renderProfileCard(profile, index)).join('')}
+      </div>
+    `
     : `
       <div class="empty-state">
         <h3>No server profiles yet</h3>
-        <p>Add a Canvas host profile here. Hosts are saved locally and bearer tokens are stored in your device keychain.</p>
+        <p>Add your first Canvas environment here. Hosts are saved locally and bearer tokens are stored in the device keychain.</p>
       </div>
     `
 
@@ -348,48 +373,52 @@ function renderServersView() {
     <section class="content-grid">
       <header class="page-header">
         <div>
-          <h2>Servers</h2>
-          <p>Create explicit Canvas environments with a host and masked bearer token field.</p>
+          <p class="eyebrow">Server Profiles</p>
+          <h2>Saved Canvas environments</h2>
+          <p>Keep an explicit list of Canvas servers on this device. Each profile stores a host, while the bearer token is written to the OS keychain.</p>
         </div>
         <div class="inline-actions">
-          <button class="primary-button" type="button" data-action="add-profile">Add server</button>
+          <button class="primary-button" type="button" data-action="add-profile">Add server profile</button>
         </div>
       </header>
       ${renderStatusBanner()}
       <div class="helper-banner">
-        Keep profile names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are stored in the OS keychain for local test calls and are never written into <code>.query.json</code> exports.
+        Keep names explicit, such as <code>uwm-prod</code> or <code>uwm-test</code>. Tokens are saved to the OS keychain for local test calls and are never written into <code>.query.json</code> exports.
       </div>
-      ${serverCards}
+      ${profileList}
     </section>
   `
 }
 
-function renderProfileCard(profile) {
+function renderProfileCard(profile, index) {
   return `
-    <section class="server-card" aria-labelledby="${profile.id}-heading">
-      <div class="section-header">
+    <section class="server-card" role="listitem" aria-labelledby="${profile.id}-heading">
+      <div class="server-card-header">
         <div>
+          <p class="server-index">Profile ${index + 1}</p>
           <h3 id="${profile.id}-heading">${escapeHtml(profile.name || 'Untitled server')}</h3>
-          <p>Host and token settings for a Canvas environment.</p>
+          <p>Host metadata is saved locally. Bearer tokens are kept in the device keychain.</p>
         </div>
         <button class="ghost-button" type="button" data-action="remove-profile" data-profile-id="${profile.id}">Remove</button>
       </div>
-      <label class="control-group">
-        <span>Profile name</span>
-        <input type="text" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" data-profile-field="name" />
-      </label>
-      <label class="control-group">
-        <span>Canvas host</span>
-        <input type="url" placeholder="https://canvas.example.edu" value="${escapeHtml(profile.host)}" data-profile-id="${profile.id}" data-profile-field="host" />
-      </label>
-      <label class="control-group">
-        <span>Bearer token</span>
-        <input type="password" autocomplete="off" placeholder="${profile.hasToken ? 'Saved in your device keychain' : 'Enter a token to save to the device keychain'}" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
-      </label>
-      <div class="inline-actions">
+      <div class="server-card-body">
+        <label class="control-group">
+          <span>Profile name</span>
+          <input type="text" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" data-profile-field="name" />
+        </label>
+        <label class="control-group">
+          <span>Canvas host</span>
+          <input type="url" placeholder="https://canvas.example.edu" value="${escapeHtml(profile.host)}" data-profile-id="${profile.id}" data-profile-field="host" />
+        </label>
+        <label class="control-group">
+          <span>Bearer token</span>
+          <input type="password" autocomplete="off" placeholder="${profile.hasToken ? 'Saved in your device keychain' : 'Enter a token to save to the device keychain'}" value="${escapeHtml(profile.token)}" data-profile-id="${profile.id}" data-profile-field="token" />
+        </label>
+      </div>
+      <div class="inline-actions server-card-footer">
         ${profile.hasToken
-          ? '<span class="connection-label">A token is saved in the device keychain.</span>'
-          : '<span class="connection-label">No token is saved for this profile yet.</span>'}
+          ? '<span class="connection-label">Bearer token is stored in the device keychain.</span>'
+          : '<span class="connection-label">No bearer token has been saved for this profile yet.</span>'}
         ${profile.hasToken
           ? `<button class="ghost-button" type="button" data-action="clear-profile-token" data-profile-id="${profile.id}">Clear saved token</button>`
           : ''}
