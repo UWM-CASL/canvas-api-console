@@ -14,6 +14,14 @@ export function didGitRevisionChange(input: {
   currentRevision: string | null;
 }): boolean;
 
+export function getGitUpdateCommands(input: {
+  hasTrackedChanges: boolean;
+}): {
+  prePull: string[][];
+  pull: string[];
+  postPull: string[][];
+};
+
 export function getOpenCommand(
   url: string,
   platform: NodeJS.Platform

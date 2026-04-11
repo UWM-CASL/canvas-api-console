@@ -15,6 +15,16 @@ export function didGitRevisionChange({ previousRevision, currentRevision }) {
   return Boolean(previousRevision && currentRevision && previousRevision !== currentRevision);
 }
 
+export function getGitUpdateCommands({ hasTrackedChanges }) {
+  return {
+    prePull: hasTrackedChanges
+      ? [['stash', 'push', '--include-untracked', '--message', 'canvas-api-console:auto-update']]
+      : [],
+    pull: ['pull', '--ff-only'],
+    postPull: hasTrackedChanges ? [['stash', 'pop']] : []
+  };
+}
+
 export function getOpenCommand(url, platform) {
   if (platform === 'darwin') {
     return { command: 'open', args: [url] };
@@ -28,9 +38,16 @@ export function getOpenCommand(url, platform) {
 }
 
 export function getNpmCommand(platform) {
+  if (platform === 'win32') {
+    return {
+      command: 'npm.cmd',
+      shell: false
+    };
+  }
+
   return {
     command: 'npm',
-    shell: platform === 'win32'
+    shell: false
   };
 }
 
@@ -72,6 +89,21 @@ function getGitRevision(cwd) {
   return result.stdout.trim();
 }
 
+function hasTrackedGitChanges(cwd) {
+  const result = spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], {
+    cwd,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: process.env,
+    encoding: 'utf8'
+  });
+
+  if (result.status !== 0) {
+    return false;
+  }
+
+  return result.stdout.trim().length > 0;
+}
+
 async function main() {
   const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
   const hasGitDirectory = existsSync(path.join(repoRoot, '.git'));
@@ -84,8 +116,18 @@ async function main() {
   let gitUpdated = false;
 
   if (updateEnabled) {
+    const updateCommands = getGitUpdateCommands({
+      hasTrackedChanges: hasTrackedGitChanges(repoRoot)
+    });
+    let restoreStash = false;
+
     try {
-      runCommand('git', ['pull', '--ff-only'], { cwd: repoRoot });
+      for (const args of updateCommands.prePull) {
+        runCommand('git', args, { cwd: repoRoot });
+        restoreStash = true;
+      }
+
+      runCommand('git', updateCommands.pull, { cwd: repoRoot });
       gitUpdated = didGitRevisionChange({
         previousRevision: previousGitRevision,
         currentRevision: getGitRevision(repoRoot)
@@ -93,6 +135,19 @@ async function main() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`Skipping automatic update: ${message}`);
+    } finally {
+      if (restoreStash) {
+        try {
+          for (const args of updateCommands.postPull) {
+            runCommand('git', args, { cwd: repoRoot });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(
+            `Automatic update restored from stash incompletely: ${message}. Your changes remain in git stash.`
+          );
+        }
+      }
     }
   }
 

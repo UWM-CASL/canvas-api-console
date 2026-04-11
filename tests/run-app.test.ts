@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canCheckForUpdates,
   didGitRevisionChange,
+  getGitUpdateCommands,
   getNpmCommand,
   getOpenCommand,
   shouldInstallDependencies
@@ -39,6 +40,19 @@ describe('run-app helpers', () => {
     );
   });
 
+  it('stashes local tracked changes before auto-updating and restores them afterward', () => {
+    expect(getGitUpdateCommands({ hasTrackedChanges: true })).toEqual({
+      prePull: [['stash', 'push', '--include-untracked', '--message', 'canvas-api-console:auto-update']],
+      pull: ['pull', '--ff-only'],
+      postPull: [['stash', 'pop']]
+    });
+    expect(getGitUpdateCommands({ hasTrackedChanges: false })).toEqual({
+      prePull: [],
+      pull: ['pull', '--ff-only'],
+      postPull: []
+    });
+  });
+
   it('uses platform-appropriate browser commands', () => {
     expect(getOpenCommand('http://127.0.0.1:3210/', 'darwin')).toEqual({
       command: 'open',
@@ -56,8 +70,8 @@ describe('run-app helpers', () => {
 
   it('uses npm in a Windows-compatible way', () => {
     expect(getNpmCommand('win32')).toEqual({
-      command: 'npm',
-      shell: true
+      command: 'npm.cmd',
+      shell: false
     });
     expect(getNpmCommand('linux')).toEqual({
       command: 'npm',
