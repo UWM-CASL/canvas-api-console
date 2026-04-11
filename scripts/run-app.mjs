@@ -39,14 +39,18 @@ export function getOpenCommand(url, platform) {
 
 export function getNpmCommand(platform) {
   if (platform === 'win32') {
+    const nodeDirectory = path.dirname(process.execPath);
+
     return {
-      command: 'npm.cmd',
+      command: process.execPath,
+      argsPrefix: [path.join(nodeDirectory, 'node_modules', 'npm', 'bin', 'npm-cli.js')],
       shell: false
     };
   }
 
   return {
     command: 'npm',
+    argsPrefix: [],
     shell: false
   };
 }
@@ -152,10 +156,16 @@ async function main() {
   }
 
   if (shouldInstallDependencies({ gitUpdated, hasNodeModules, hasPackageJson })) {
-    runCommand(npmCommand.command, ['install'], { cwd: repoRoot, shell: npmCommand.shell });
+    runCommand(npmCommand.command, [...npmCommand.argsPrefix, 'install'], {
+      cwd: repoRoot,
+      shell: npmCommand.shell
+    });
   }
 
-  runCommand(npmCommand.command, ['run', 'build'], { cwd: repoRoot, shell: npmCommand.shell });
+  runCommand(npmCommand.command, [...npmCommand.argsPrefix, 'run', 'build'], {
+    cwd: repoRoot,
+    shell: npmCommand.shell
+  });
 
   const { startServer } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'src', 'server.js')).href);
   const requestedPort = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : undefined;

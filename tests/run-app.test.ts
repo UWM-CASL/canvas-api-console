@@ -69,12 +69,16 @@ describe('run-app helpers', () => {
   });
 
   it('uses npm in a Windows-compatible way', () => {
-    expect(getNpmCommand('win32')).toEqual({
-      command: 'npm.cmd',
-      shell: false
-    });
+    expect(getNpmCommand('win32')).toEqual(
+      expect.objectContaining({
+        command: process.execPath,
+        argsPrefix: [expect.stringContaining('npm-cli.js')],
+        shell: false
+      })
+    );
     expect(getNpmCommand('linux')).toEqual({
       command: 'npm',
+      argsPrefix: [],
       shell: false
     });
   });

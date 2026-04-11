@@ -32,5 +32,6 @@ export function getOpenCommand(
 
 export function getNpmCommand(platform: NodeJS.Platform): {
   command: string;
+  argsPrefix: string[];
   shell: boolean;
 };
