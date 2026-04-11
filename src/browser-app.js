@@ -631,9 +631,9 @@ function renderStartField(field) {
       <div class="field-summary">
         <div class="field-actions">
           <strong>${escapeHtml(fieldLabel)}</strong>
-          <div class="inline-actions">
+          <div class="field-icon-actions">
             <button
-              class="ghost-button icon-button"
+              class="icon-control"
               type="button"
               data-action="toggle-start-field-visibility"
               data-field-id="${field.id}"
@@ -644,7 +644,7 @@ function renderStartField(field) {
               <span class="sr-only">${escapeHtml(visibilityLabel)}</span>
             </button>
             <button
-              class="ghost-button icon-button"
+              class="icon-control"
               type="button"
               data-action="remove-start-field"
               data-field-id="${field.id}"
@@ -654,7 +654,6 @@ function renderStartField(field) {
               <span class="icon-button-mark" aria-hidden="true">${renderIcon('trash')}</span>
               <span class="sr-only">Delete field</span>
             </button>
-            ${renderOutputHandle('start', field.id, `Use ${fieldLabel} as an input source`)}
           </div>
         </div>
       </div>

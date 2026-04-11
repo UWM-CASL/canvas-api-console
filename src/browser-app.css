@@ -501,6 +501,24 @@ pre {
   height: 1rem;
 }
 
+.icon-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.icon-control:hover,
+.icon-control:focus-visible {
+  color: var(--accent-strong);
+  background: transparent;
+}
+
 .toolbar-button {
   display: grid;
   justify-items: center;
@@ -584,6 +602,16 @@ pre {
   gap: 0.35rem;
 }
 
+.control-group span {
+  font-size: 0.88rem;
+}
+
+.field-editor input,
+.field-editor select {
+  padding: 0.34rem 0.48rem;
+  font-size: 0.94rem;
+}
+
 .node-grid {
   grid-template-columns: minmax(0, 1fr) minmax(0, 7rem);
 }
@@ -626,6 +654,23 @@ pre {
 .field-editor {
   display: grid;
   gap: 0.5rem;
+}
+
+.field-summary {
+  align-content: start;
+}
+
+.field-summary strong {
+  font-size: 0.94rem;
+  line-height: 1.2;
+}
+
+.field-icon-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
 }
 
 .field-grid {
